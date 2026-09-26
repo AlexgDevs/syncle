@@ -12,3 +12,9 @@ dependencies = [
     "pydantic-settings>=2.15.0",
     "sqlalchemy>=2.1.1",
 ]
+
+[tool.mypy]
+strict = true
+show_error_codes = true
+exclude = [".venv", "migrations"]
+disable_error_code = ["import-untyped"]
