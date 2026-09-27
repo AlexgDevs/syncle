@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
+    BOT_TOKEN: str
 
     @computed_field  # type: ignore
     @property
