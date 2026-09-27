@@ -1,3 +1,4 @@
+from src.core.database.base import UUIDBase
 from src.core.database.mixin import UUIDMixin
 from src.core.database.types import (
     int_pk,
@@ -10,6 +11,7 @@ from src.core.database.types import (
 )
 
 __all__ = [
+    "UUIDBase",
     "UUIDMixin",
     "int_pk",
     "str_128",
