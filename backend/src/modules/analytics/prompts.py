@@ -1,7 +1,6 @@
 """Prompts for express comparison.
 
 TODO(F15): move to a versioned prompt registry shared by all modules.
-TODO(F16): add golden-set evaluation for these prompts.
 """
 
 from src.modules.analytics.schemas import CompetitorCard
@@ -11,9 +10,19 @@ COMPARISON_SYSTEM = (
     "Отвечай ТОЛЬКО валидным JSON без пояснений и без Markdown."
 )
 
-_JSON_FORMAT = 'Формат ответа: {"content_weaknesses": ["пункт 1", "пункт 2"]}'
-_MAX_DESCRIPTION = 1500
+_JSON_FORMAT = (
+    'Формат ответа: {"content_weaknesses": ['
+    '{"fact": "что описано слабо", '
+    '"evidence": "конкретный факт из данных выше", '
+    '"how_to_beat": "как нашему селлеру это обыграть"}]}'
+)
+_STRUCTURE_RULES = (
+    "Каждый пункт — объект ровно из трёх полей: fact, evidence, how_to_beat. "
+    "Все три поля — непустые фразы на русском языке; в каждом пункте до 2 предложений."
+)
+_MAX_DESCRIPTION = 3000
 COMPARISON_TEMPERATURE = 0.4
+COMPARISON_MAX_TOKENS = 800
 
 
 def _card_block(card: CompetitorCard) -> str:
@@ -48,5 +57,6 @@ def build_comparison_prompt(
         "слабо, отсутствует или не убеждает покупателя — на что наш селлер "
         "может обыграть конкурента. Только по данным выше, без выдуманных "
         "цифр и фактов, на русском языке.\n"
+        f"{_STRUCTURE_RULES}\n"
         f"{_JSON_FORMAT}"
     )

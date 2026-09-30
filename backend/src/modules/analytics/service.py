@@ -14,6 +14,7 @@ from src.core.settings import get_settings
 from src.modules.analytics.errors import CardParseError, UnsupportedMarketplaceError
 from src.modules.analytics.parsers import CardParser, WbParser, WbPriceSource
 from src.modules.analytics.prompts import (
+    COMPARISON_MAX_TOKENS,
     COMPARISON_SYSTEM,
     COMPARISON_TEMPERATURE,
     build_comparison_prompt,
@@ -58,6 +59,28 @@ def _detect_marketplace(source: str) -> str | None:
     return None
 
 
+def _format_weakness(item: object) -> str | None:
+    """Normalize one weakness: plain string or fact/evidence/how_to_beat object."""
+    if isinstance(item, str):
+        return item.strip() or None
+    if isinstance(item, dict):
+        parts = [
+            str(item.get(field) or "").strip()
+            for field in ("fact", "evidence", "how_to_beat")
+        ]
+        parts = [part for part in parts if part]
+        if not parts:
+            return None
+        text = parts[0]
+        for part in parts[1:]:
+            separator = " " if text.endswith((".", "!", "?")) else ". "
+            text += separator + part
+        if not text.endswith((".", "!", "?")):
+            text += "."
+        return text
+    return None
+
+
 def _parse_weaknesses(raw: str) -> list[str]:
     text = raw.strip()
     if text.startswith("```"):
@@ -69,9 +92,8 @@ def _parse_weaknesses(raw: str) -> list[str]:
     items = data.get("content_weaknesses") if isinstance(data, dict) else None
     if not isinstance(items, list):
         return []
-    return [item.strip() for item in items if isinstance(item, str) and item.strip()][
-        :_MAX_WEAKNESSES
-    ]
+    formatted = [_format_weakness(item) for item in items]
+    return [text for text in formatted if text][:_MAX_WEAKNESSES]
 
 
 def _optimal_price(competitor_price: Decimal | None) -> Decimal | None:
@@ -138,6 +160,7 @@ class ExpressAnalysisService:
                 prompt,
                 system=COMPARISON_SYSTEM,
                 temperature=COMPARISON_TEMPERATURE,
+                max_tokens=COMPARISON_MAX_TOKENS,
             )
         except LLMError as exc:
             logger.warning("LLM narrative degraded: %s", type(exc).__name__)
