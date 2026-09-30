@@ -1,3 +1,4 @@
+import logging
 from functools import lru_cache
 
 from openai import (
@@ -16,6 +17,8 @@ from src.core.llm.errors import (
 )
 from src.core.llm.provider import LLMProvider
 from src.core.settings import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class ProxyApiProvider:
@@ -56,12 +59,26 @@ class ProxyApiProvider:
             raise LLMUnavailableError(
                 f"LLM request failed: {type(exc).__name__}."
             ) from exc
+        self._log_usage(response)
         content = response.choices[0].message.content if response.choices else None
         if not content:
             raise LLMUnavailableError(
                 f"LLM returned an empty completion for model {self._model!r}."
             )
         return content
+
+    def _log_usage(self, response: object) -> None:
+        """Log token usage per call for cost control (#11); never logs the key."""
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return
+        logger.info(
+            "llm usage: model=%s prompt=%s completion=%s total=%s",
+            self._model,
+            getattr(usage, "prompt_tokens", "?"),
+            getattr(usage, "completion_tokens", "?"),
+            getattr(usage, "total_tokens", "?"),
+        )
 
 
 @lru_cache
