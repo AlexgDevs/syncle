@@ -4,11 +4,14 @@ import logging
 from functools import lru_cache
 from urllib.parse import urlparse
 
+from decimal import Decimal, ROUND_HALF_UP
+
 import httpx
 
 from src.core.llm import LLMError, LLMProvider, get_llm_provider
+from src.core.settings import get_settings
 from src.modules.analytics.errors import CardParseError, UnsupportedMarketplaceError
-from src.modules.analytics.parsers import CardParser, WbParser
+from src.modules.analytics.parsers import CardParser, WbParser, WbPriceSource
 from src.modules.analytics.prompts import (
     COMPARISON_SYSTEM,
     COMPARISON_TEMPERATURE,
@@ -21,8 +24,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_WEAKNESSES = 5
 
-# TODO(P07): price / optimal_price need a working price source
-# (browser/proxy escalation spike); until then price stays None ("недоступна").
+_PRICE_QUANT = Decimal("0.01")
 
 
 @lru_cache
@@ -71,6 +73,16 @@ def _parse_weaknesses(raw: str) -> list[str]:
     ]
 
 
+def _optimal_price(competitor_price: Decimal | None) -> Decimal | None:
+    """Heuristic: undercut the competitor by a configurable percent."""
+    if competitor_price is None:
+        return None
+    pct = Decimal(str(get_settings().OPTIMAL_PRICE_UNDERCUT_PCT))
+    optimal = competitor_price * (Decimal("1") - pct / Decimal("100"))
+    optimal = optimal.quantize(_PRICE_QUANT, rounding=ROUND_HALF_UP)
+    return optimal if optimal > 0 else None
+
+
 class ExpressAnalysisService:
     def __init__(self, parser: CardParser, llm: LLMProvider | None = None) -> None:
         self.parser = parser
@@ -87,6 +99,7 @@ class ExpressAnalysisService:
                 self._fetch_card(rival_source),
             )
         report = AnalysisReport(competitor=rival, own_card=own)
+        report.optimal_price = _optimal_price(rival.price)
         if own is not None:
             report.missed_seo_keys = missed_seo_keys(own, rival)
             report.content_weaknesses = await self._content_weaknesses(
@@ -123,6 +136,8 @@ class ExpressAnalysisService:
 
 
 def get_analytics_service() -> ExpressAnalysisService:
+    client = _get_client()
     return ExpressAnalysisService(
-        parser=WbParser(_get_client()), llm=get_llm_provider()
+        parser=WbParser(client, price_source=WbPriceSource(client)),
+        llm=get_llm_provider(),
     )

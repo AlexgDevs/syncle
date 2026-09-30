@@ -4,13 +4,19 @@ from urllib.parse import urlparse
 import httpx
 
 from src.modules.analytics.errors import CardNotFoundError, CardParseError
+from src.modules.analytics.parsers.base import CardPriceSource
 from src.modules.analytics.parsers.constants import BASKET_GUESSES, NM_FROM_URL
 from src.modules.analytics.schemas import CompetitorCard
 
 
 class WbParser:
-    def __init__(self, client: httpx.AsyncClient) -> None:
+    def __init__(
+        self,
+        client: httpx.AsyncClient,
+        price_source: CardPriceSource | None = None,
+    ) -> None:
         self._client = client
+        self._price_source = price_source
         self._basket_by_vol: dict[int, int] = {}
 
     async def parse(self, source: str) -> CompetitorCard:
@@ -18,12 +24,16 @@ class WbParser:
         data = await self._fetch_card_json(nm)
         feedbacks = await self._fetch_feedbacks(data.get("imt_id"))
         selling = data.get("selling") or {}
+        price = None
+        if self._price_source is not None:
+            price = await self._price_source.fetch_price(nm)
         return CompetitorCard(
             source=source.strip(),
             title=data.get("imt_name"),
             description=data.get("description"),
             brand=selling.get("brand_name"),
             category=data.get("subj_name"),
+            price=price,
             rating=self._as_float(feedbacks.get("valuation")) if feedbacks else None,
             feedbacks_count=(
                 self._as_int(feedbacks.get("feedbackCount")) if feedbacks else None

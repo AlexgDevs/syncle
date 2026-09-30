@@ -14,6 +14,7 @@ ANALYSIS_REPORT = (
     "Бренд: {brand}\n"
     "Категория: {category}\n"
     "Цена: {price}\n"
+    "Оптимальная цена: {optimal}\n"
     "Рейтинг: {rating}\n"
     "Отзывов: {feedbacks}\n\n"
     "Описание:\n{description}"
@@ -22,8 +23,8 @@ ANALYSIS_REPORT = (
 COMPARISON_REPORT = (
     "📊 Сравнение карточек\n\n"
     "👤 Твоя карточка:\n{own}\n\n"
-    "🏁 Конкурент:\n{rival}\n"
-    "{missed}{weaknesses}"
+    "🏁 Конкурент:\n{rival}"
+    "{optimal}\n{missed}{weaknesses}"
 )
 
 CARD_BLOCK = (
@@ -35,6 +36,12 @@ MISSED_KEYS = "\n🔑 Упущенные SEO-ключи (есть у конку�
 MISSED_KEYS_EMPTY = "\n🔑 Упущенные SEO-ключи: не найдены — уже покрыты.\n"
 
 WEAKNESSES = "\n⚠️ Слабые места контента конкурента:\n{items}"
+
+OPTIMAL_PRICE = "\n💡 Оптимальная цена для нас: {optimal} ₽{note}"
+
+OPTIMAL_OWN_LOWER = " — твоя цена уже ниже, обыгрывай контентом"
+
+OPTIMAL_OWN_HIGHER = " — твоя цена выше на {delta} ₽"
 
 
 def _price(price: Decimal | None) -> str:
@@ -66,12 +73,27 @@ def _render_single(report: AnalysisReport) -> str:
         brand=card.brand or NO_DATA,
         category=card.category or NO_DATA,
         price=_price(card.price),
+        optimal=_price(report.optimal_price),
         rating=card.rating if card.rating is not None else NO_DATA,
         feedbacks=(
             card.feedbacks_count if card.feedbacks_count is not None else NO_DATA
         ),
         description=description,
     )
+
+
+def _optimal_block(report: AnalysisReport) -> str:
+    optimal = report.optimal_price
+    if optimal is None:
+        return ""
+    own = report.own_card
+    note = ""
+    if own is not None and own.price is not None:
+        if own.price <= optimal:
+            note = OPTIMAL_OWN_LOWER
+        else:
+            note = OPTIMAL_OWN_HIGHER.format(delta=own.price - optimal)
+    return OPTIMAL_PRICE.format(optimal=optimal, note=note)
 
 
 def _render_comparison(report: AnalysisReport) -> str:
@@ -94,6 +116,7 @@ def _render_comparison(report: AnalysisReport) -> str:
     return COMPARISON_REPORT.format(
         own=_card_line(own),
         rival=_card_line(report.competitor),
+        optimal=_optimal_block(report),
         missed=missed,
         weaknesses=weaknesses,
     )

@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     LLM_MODEL: str = ""
     LLM_TIMEOUT: float = 30.0
 
+    # Price parsing (Playwright browser level, see docs/adr/ADR-004)
+    PRICE_ENABLED: bool = True
+    PRICE_HEADLESS: bool = False  # WB antibot blocks headless browsers
+    PRICE_TIMEOUT: float = 45.0
+    PROXY_URL: str = ""  # e.g. http://user:pass@host:port
+    PROXY_ROTATE_URL: str = ""  # HTTP endpoint that swaps the proxy IP
+    OPTIMAL_PRICE_UNDERCUT_PCT: float = 3.0
+
     @computed_field  # type: ignore
     @property
     def DATABASE_URL(self) -> PostgresDsn:
