@@ -1,4 +1,7 @@
-class CardParseError(Exception):
+from src.core.errors import SyncleError
+
+
+class CardParseError(SyncleError):
     """Failed to get or parse a product card."""
 
 

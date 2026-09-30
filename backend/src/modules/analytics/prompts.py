@@ -13,6 +13,7 @@ COMPARISON_SYSTEM = (
 
 _JSON_FORMAT = 'Формат ответа: {"content_weaknesses": ["пункт 1", "пункт 2"]}'
 _MAX_DESCRIPTION = 1500
+COMPARISON_TEMPERATURE = 0.4
 
 
 def _card_block(card: CompetitorCard) -> str:

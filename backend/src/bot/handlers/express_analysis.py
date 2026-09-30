@@ -1,27 +1,20 @@
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from src.bot.keyboards.inline import back_menu, express_setup
 from src.bot.renderers import render_analysis_report
 from src.bot.texts import (
     ANALYSIS_LOADING,
-    CARD_NOT_FOUND,
     EXPRESS_OWN_PROMPT,
     EXPRESS_RIVAL_PROMPT,
     INVALID_INPUT,
     MEDIA_HINT,
-    PARSE_FAILED,
-    UNSUPPORTED_MARKETPLACE,
 )
 from src.bot.utils import is_valid_card_input
 from src.modules.analytics import get_analytics_service
-from src.modules.analytics.errors import (
-    CardNotFoundError,
-    CardParseError,
-    UnsupportedMarketplaceError,
-)
 
 router = Router(name="express_analysis")
 
@@ -31,24 +24,37 @@ class ExpressAnalysis(StatesGroup):
     waiting_rival = State()
 
 
+async def _edit_or_pass(
+    message: Message, text: str, reply_markup: InlineKeyboardMarkup | None
+) -> None:
+    try:
+        await message.edit_text(text, reply_markup=reply_markup)
+    except TelegramBadRequest as exc:
+        if "message is not modified" not in str(exc):
+            raise
+
+
 @router.callback_query(F.data == "scene:express")
 async def start_analysis(callback: CallbackQuery, state: FSMContext) -> None:
     if not isinstance(callback.message, Message):
         await callback.answer()
         return
     await state.set_state(ExpressAnalysis.waiting_own)
-    await callback.message.edit_text(EXPRESS_OWN_PROMPT, reply_markup=express_setup())
+    await _edit_or_pass(callback.message, EXPRESS_OWN_PROMPT, express_setup())
     await callback.answer()
 
 
 @router.callback_query(F.data == "scene:express:skip")
 async def skip_own(callback: CallbackQuery, state: FSMContext) -> None:
+    if (await state.get_state()) != ExpressAnalysis.waiting_own.state:
+        await callback.answer()
+        return
     await state.update_data(own=None)
     await state.set_state(ExpressAnalysis.waiting_rival)
     if not isinstance(callback.message, Message):
         await callback.answer()
         return
-    await callback.message.edit_text(EXPRESS_RIVAL_PROMPT, reply_markup=back_menu())
+    await _edit_or_pass(callback.message, EXPRESS_RIVAL_PROMPT, back_menu())
     await callback.answer()
 
 
@@ -71,19 +77,7 @@ async def handle_rival(message: Message, state: FSMContext) -> None:
         return
     own = (await state.get_data()).get("own")
     status = await message.answer(ANALYSIS_LOADING)
-    try:
-        report = await get_analytics_service().compare_cards(own, value)
-    except UnsupportedMarketplaceError as exc:
-        await status.edit_text(
-            UNSUPPORTED_MARKETPLACE.format(name=exc.marketplace.title())
-        )
-        return
-    except CardNotFoundError:
-        await status.edit_text(CARD_NOT_FOUND)
-        return
-    except CardParseError:
-        await status.edit_text(PARSE_FAILED)
-        return
+    report = await get_analytics_service().compare_cards(own, value)
     await state.clear()
     await status.edit_text(render_analysis_report(report), reply_markup=back_menu())
 

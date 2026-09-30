@@ -5,7 +5,8 @@ from src.modules.analytics import AnalysisReport, CompetitorCard
 NO_DATA = "—"
 PRICE_UNAVAILABLE = "недоступна"
 DESCRIPTION_LIMIT = 600
-KEYS_RENDER_LIMIT = 12
+WEAKNESS_ITEM_LIMIT = 500
+REPORT_LIMIT = 4000
 
 ANALYSIS_REPORT = (
     "📊 Анализ карточки конкурента\n\n"
@@ -38,6 +39,10 @@ WEAKNESSES = "\n⚠️ Слабые места контента конкурен
 
 def _price(price: Decimal | None) -> str:
     return str(price) if price is not None else PRICE_UNAVAILABLE
+
+
+def _clamp(text: str, limit: int) -> str:
+    return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
 def _card_line(card: CompetitorCard) -> str:
@@ -74,12 +79,15 @@ def _render_comparison(report: AnalysisReport) -> str:
     if own is None:
         return _render_single(report)
     if report.missed_seo_keys:
-        keys = "· " + " · ".join(report.missed_seo_keys[:KEYS_RENDER_LIMIT])
+        keys = "· " + " · ".join(report.missed_seo_keys)
         missed = MISSED_KEYS.format(keys=keys)
     else:
         missed = MISSED_KEYS_EMPTY
     if report.content_weaknesses:
-        items = "\n".join(f"• {item}" for item in report.content_weaknesses)
+        items = "\n".join(
+            f"• {_clamp(item, WEAKNESS_ITEM_LIMIT)}"
+            for item in report.content_weaknesses
+        )
         weaknesses = WEAKNESSES.format(items=items)
     else:
         weaknesses = ""
@@ -93,5 +101,7 @@ def _render_comparison(report: AnalysisReport) -> str:
 
 def render_analysis_report(report: AnalysisReport) -> str:
     if report.own_card is not None:
-        return _render_comparison(report)
-    return _render_single(report)
+        text = _render_comparison(report)
+    else:
+        text = _render_single(report)
+    return _clamp(text, REPORT_LIMIT)

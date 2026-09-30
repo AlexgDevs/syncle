@@ -1,4 +1,7 @@
-class LLMError(Exception):
+from src.core.errors import SyncleError
+
+
+class LLMError(SyncleError):
     """Base class for LLM provider failures."""
 
 

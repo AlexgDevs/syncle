@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 from functools import lru_cache
 from urllib.parse import urlparse
 
@@ -8,9 +9,15 @@ import httpx
 from src.core.llm import LLMError, LLMProvider, get_llm_provider
 from src.modules.analytics.errors import CardParseError, UnsupportedMarketplaceError
 from src.modules.analytics.parsers import CardParser, WbParser
-from src.modules.analytics.prompts import COMPARISON_SYSTEM, build_comparison_prompt
+from src.modules.analytics.prompts import (
+    COMPARISON_SYSTEM,
+    COMPARISON_TEMPERATURE,
+    build_comparison_prompt,
+)
 from src.modules.analytics.schemas import AnalysisReport, CompetitorCard
 from src.modules.analytics.seo_diff import missed_seo_keys
+
+logger = logging.getLogger(__name__)
 
 _MAX_WEAKNESSES = 5
 
@@ -105,10 +112,12 @@ class ExpressAnalysisService:
         prompt = build_comparison_prompt(own, rival, missed_keys)
         try:
             raw = await self.llm.complete(
-                prompt, system=COMPARISON_SYSTEM, temperature=0.4
+                prompt,
+                system=COMPARISON_SYSTEM,
+                temperature=COMPARISON_TEMPERATURE,
             )
-        except LLMError:
-            # TODO(F06): log with structured logging; report degrades to diff only.
+        except LLMError as exc:
+            logger.warning("LLM narrative degraded: %s", type(exc).__name__)
             return []
         return _parse_weaknesses(raw)
 

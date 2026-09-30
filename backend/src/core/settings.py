@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
     BOT_TOKEN: str
+    LOG_LEVEL: str = "INFO"
 
     # LLM (OpenAI-compatible gateway, e.g. ProxyAPI)
     LLM_API_KEY: str = ""
