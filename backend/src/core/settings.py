@@ -28,6 +28,18 @@ class Settings(BaseSettings):
     LLM_MODEL: str = ""
     LLM_TIMEOUT: float = 30.0
 
+    # Redis (local instance; Taskiq broker and job state)
+    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_MAX_CONNECTIONS: int = 10
+    REDIS_SOCKET_TIMEOUT: float = 5.0
+    REDIS_SOCKET_CONNECT_TIMEOUT: float = 5.0
+    REDIS_RETRY_ON_TIMEOUT: bool = False
+
+    # Background jobs: "inline" keeps the fast awaited path,
+    # "taskiq" submits long analyses to the Taskiq/Redis worker (#38)
+    JOBS_MODE: str = "inline"
+    JOBS_POLL_INTERVAL: float = 2.0
+
     # Price parsing (Playwright browser level, see docs/adr/ADR-004)
     PRICE_ENABLED: bool = True
     PRICE_HEADLESS: bool = False  # WB antibot blocks headless browsers

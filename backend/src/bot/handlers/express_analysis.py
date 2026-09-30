@@ -4,6 +4,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
+from src.bot.delivery import AiogramResultSink
+from src.bot.jobs import get_job_runner
 from src.bot.keyboards.inline import back_menu, express_setup
 from src.bot.renderers import render_analysis_report
 from src.bot.texts import (
@@ -14,7 +16,10 @@ from src.bot.texts import (
     MEDIA_HINT,
 )
 from src.bot.utils import is_valid_card_input
+from src.core.results import ResultSink
+from src.core.settings import get_settings
 from src.modules.analytics import get_analytics_service
+from src.modules.analytics.jobs import ANALYSIS_JOB_TYPE
 
 router = Router(name="express_analysis")
 
@@ -77,9 +82,29 @@ async def handle_rival(message: Message, state: FSMContext) -> None:
         return
     own = (await state.get_data()).get("own")
     status = await message.answer(ANALYSIS_LOADING)
+    if get_settings().JOBS_MODE == "taskiq":
+        await get_job_runner().submit(
+            ANALYSIS_JOB_TYPE,
+            {
+                "own": own,
+                "rival": value,
+                "chat_id": message.chat.id,
+                "status_message_id": status.message_id,
+            },
+        )
+        await state.clear()
+        return
     report = await get_analytics_service().compare_cards(own, value)
     await state.clear()
-    await status.edit_text(render_analysis_report(report), reply_markup=back_menu())
+    if message.bot is None:
+        raise RuntimeError("telegram bot instance is not available")
+    sink: ResultSink = AiogramResultSink(message.bot)
+    await sink.deliver(
+        message.chat.id,
+        render_analysis_report(report),
+        reply_markup=back_menu(),
+        edit_message_id=status.message_id,
+    )
 
 
 @router.message(ExpressAnalysis.waiting_own)

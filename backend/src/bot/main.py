@@ -4,8 +4,10 @@ from aiogram import Bot, Dispatcher, Router
 
 from src.bot.errors import setup_error_handlers
 from src.bot.handlers import setup_handlers
+from src.bot.jobs import start_job_poller
 from src.bot.middlewares import UserMiddleware
 from src.core.logging import setup_logging
+from src.core.redis import close_redis, init_redis
 from src.core.settings import get_settings
 
 
@@ -25,7 +27,19 @@ async def run() -> None:
     setup_logging(settings.LOG_LEVEL)
     bot = Bot(token=settings.BOT_TOKEN)
     dispatcher = create_dispatcher()
-    await dispatcher.start_polling(bot)
+
+    redis_client = None
+    poller = None
+    if settings.JOBS_MODE == "taskiq":
+        redis_client = await init_redis()
+        poller = await start_job_poller(bot)
+    try:
+        await dispatcher.start_polling(bot)
+    finally:
+        if poller is not None:
+            await poller.stop()
+        if redis_client is not None:
+            await close_redis(redis_client)
 
 
 def main() -> None:

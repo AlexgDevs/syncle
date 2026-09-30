@@ -16,7 +16,10 @@ dependencies = [
     "playwright>=1.63.0",
     "pydantic>=2.13.5",
     "pydantic-settings>=2.15.0",
+    "redis>=8.1.0",
     "sqlalchemy>=2.1.1",
+    "taskiq>=0.13.0",
+    "taskiq-redis>=1.2.4",
 ]
 
 [tool.mypy]

@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from collections.abc import Awaitable, Callable
 from functools import lru_cache
 from urllib.parse import urlparse
 
@@ -89,8 +90,16 @@ class ExpressAnalysisService:
         self.llm = llm
 
     async def compare_cards(
-        self, own_source: str | None, rival_source: str
+        self,
+        own_source: str | None,
+        rival_source: str,
+        on_progress: Callable[[str], Awaitable[None]] | None = None,
     ) -> AnalysisReport:
+        async def progress(step: str) -> None:
+            if on_progress is not None:
+                await on_progress(step)
+
+        await progress("parsing_cards")
         if own_source is None:
             own, rival = None, await self._fetch_card(rival_source)
         else:
@@ -102,6 +111,7 @@ class ExpressAnalysisService:
         report.optimal_price = _optimal_price(rival.price)
         if own is not None:
             report.missed_seo_keys = missed_seo_keys(own, rival)
+            await progress("analyzing_content")
             report.content_weaknesses = await self._content_weaknesses(
                 own, rival, report.missed_seo_keys
             )
