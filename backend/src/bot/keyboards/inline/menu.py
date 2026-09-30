@@ -1,7 +1,7 @@
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from src.bot.texts import BACK_TO_MENU
+from src.bot.texts import BACK_TO_MENU, BTN_SKIP
 
 MAIN_ROWS = [
     [("📊 Аналитика ниши", "menu:niche")],
@@ -49,3 +49,7 @@ def submenu(name: str) -> InlineKeyboardMarkup:
 
 def back_menu() -> InlineKeyboardMarkup:
     return _build([[(BACK_TO_MENU, "menu:main")]])
+
+
+def express_setup() -> InlineKeyboardMarkup:
+    return _build([[(BTN_SKIP, "scene:express:skip")], [(BACK_TO_MENU, "menu:main")]])

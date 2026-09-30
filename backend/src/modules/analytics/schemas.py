@@ -19,4 +19,5 @@ class AnalysisReport(BaseModel):
     own_card: CompetitorCard | None = None
     missed_seo_keys: list[str] = []
     content_weaknesses: list[str] = []
+    # TODO(P07/K04): requires a working price source (browser/proxy spike).
     optimal_price: Decimal | None = None

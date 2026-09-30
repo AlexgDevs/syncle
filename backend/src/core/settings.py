@@ -21,6 +21,12 @@ class Settings(BaseSettings):
     POSTGRES_DB: str
     BOT_TOKEN: str
 
+    # LLM (OpenAI-compatible gateway, e.g. ProxyAPI)
+    LLM_API_KEY: str = ""
+    LLM_BASE_URL: str = "https://api.proxyapi.ru/openai/v1"
+    LLM_MODEL: str = ""
+    LLM_TIMEOUT: float = 30.0
+
     @computed_field  # type: ignore
     @property
     def DATABASE_URL(self) -> PostgresDsn:
@@ -37,6 +43,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()  # type: ignore
-
-
-settings = get_settings()
