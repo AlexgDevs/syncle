@@ -9,6 +9,7 @@ from openai import (
 )
 from openai.types.chat import ChatCompletionMessageParam
 
+from src.core.http import get_llm_client
 from src.core.llm.errors import (
     LLMError,
     LLMRateLimitError,
@@ -96,5 +97,6 @@ def get_llm_provider() -> LLMProvider | None:
         base_url=cfg.LLM_BASE_URL,
         timeout=cfg.LLM_TIMEOUT,
         max_retries=2,
+        http_client=get_llm_client(),
     )
     return ProxyApiProvider(client=client, model=cfg.LLM_MODEL)
