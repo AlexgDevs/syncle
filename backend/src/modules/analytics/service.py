@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 from collections.abc import Awaitable, Callable
 from functools import lru_cache
@@ -21,10 +20,9 @@ from src.modules.analytics.prompts import (
 )
 from src.modules.analytics.schemas import AnalysisReport, CompetitorCard
 from src.modules.analytics.seo_diff import missed_seo_keys
+from src.modules.analytics.weakness import parse_weaknesses
 
 logger = logging.getLogger(__name__)
-
-_MAX_WEAKNESSES = 5
 
 _PRICE_QUANT = Decimal("0.01")
 
@@ -57,43 +55,6 @@ def _detect_marketplace(source: str) -> str | None:
     if "ozon" in host:
         return "ozon"
     return None
-
-
-def _format_weakness(item: object) -> str | None:
-    """Normalize one weakness: plain string or fact/evidence/how_to_beat object."""
-    if isinstance(item, str):
-        return item.strip() or None
-    if isinstance(item, dict):
-        parts = [
-            str(item.get(field) or "").strip()
-            for field in ("fact", "evidence", "how_to_beat")
-        ]
-        parts = [part for part in parts if part]
-        if not parts:
-            return None
-        text = parts[0]
-        for part in parts[1:]:
-            separator = " " if text.endswith((".", "!", "?")) else ". "
-            text += separator + part
-        if not text.endswith((".", "!", "?")):
-            text += "."
-        return text
-    return None
-
-
-def _parse_weaknesses(raw: str) -> list[str]:
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.removeprefix("```json").removeprefix("```").removesuffix("```")
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        return []
-    items = data.get("content_weaknesses") if isinstance(data, dict) else None
-    if not isinstance(items, list):
-        return []
-    formatted = [_format_weakness(item) for item in items]
-    return [text for text in formatted if text][:_MAX_WEAKNESSES]
 
 
 def _optimal_price(competitor_price: Decimal | None) -> Decimal | None:
@@ -165,7 +126,7 @@ class ExpressAnalysisService:
         except LLMError as exc:
             logger.warning("LLM narrative degraded: %s", type(exc).__name__)
             return []
-        return _parse_weaknesses(raw)
+        return parse_weaknesses(raw)
 
 
 def get_analytics_service() -> ExpressAnalysisService:

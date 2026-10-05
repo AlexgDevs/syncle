@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from src.modules.analytics.schemas import CompetitorCard
-from src.modules.analytics.service import _parse_weaknesses
+from src.modules.analytics.weakness import parse_weaknesses
 
 DEFAULT_DATA_DIR = Path(__file__).resolve().parents[3] / "data" / "golden"
 
@@ -70,7 +70,7 @@ def load_cases(data_dir: Path = DEFAULT_DATA_DIR) -> list[GoldenCase]:
 def check_output(case: GoldenCase, raw: str) -> list[str]:
     """Structure + keyword checks; returns violations (empty = pass)."""
     violations: list[str] = []
-    items = _parse_weaknesses(raw)
+    items = parse_weaknesses(raw)
     if not items:
         return ["output did not parse into content_weaknesses"]
     if len(items) < case.expect.min_items:
