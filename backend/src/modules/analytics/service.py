@@ -1,13 +1,11 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from functools import lru_cache
 from urllib.parse import urlparse
 
 from decimal import Decimal, ROUND_HALF_UP
 
-import httpx
-
+from src.core.http import get_client
 from src.core.llm import LLMError, LLMProvider, get_llm_provider
 from src.core.settings import get_settings
 from src.modules.analytics.errors import CardParseError, UnsupportedMarketplaceError
@@ -25,23 +23,6 @@ from src.modules.analytics.weakness import parse_weaknesses
 logger = logging.getLogger(__name__)
 
 _PRICE_QUANT = Decimal("0.01")
-
-
-@lru_cache
-def _get_client() -> httpx.AsyncClient:
-    return httpx.AsyncClient(
-        timeout=httpx.Timeout(10.0),
-        follow_redirects=True,
-        headers={
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/124.0.0.0 Safari/537.36"
-            ),
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "ru-RU,ru;q=0.9",
-        },
-    )
 
 
 def _detect_marketplace(source: str) -> str | None:
@@ -130,8 +111,11 @@ class ExpressAnalysisService:
 
 
 def get_analytics_service() -> ExpressAnalysisService:
-    client = _get_client()
     return ExpressAnalysisService(
-        parser=WbParser(client, price_source=WbPriceSource(client)),
+        parser=WbParser(
+            get_client("basket"),
+            price_source=WbPriceSource(get_client("basket")),
+            feedbacks_client=get_client("feedbacks"),
+        ),
         llm=get_llm_provider(),
     )
