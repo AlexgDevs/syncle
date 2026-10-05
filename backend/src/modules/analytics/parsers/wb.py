@@ -14,9 +14,11 @@ class WbParser:
         self,
         client: httpx.AsyncClient,
         price_source: CardPriceSource | None = None,
+        feedbacks_client: httpx.AsyncClient | None = None,
     ) -> None:
         self._client = client
         self._price_source = price_source
+        self._feedbacks_client = feedbacks_client or client
         self._basket_by_vol: dict[int, int] = {}
 
     async def parse(self, source: str) -> CompetitorCard:
@@ -84,7 +86,7 @@ class WbParser:
         if not isinstance(imt_id, int):
             return None
         try:
-            response = await self._client.get(
+            response = await self._feedbacks_client.get(
                 f"https://feedbacks2.wb.ru/feedbacks/v2/{imt_id}"
             )
         except httpx.HTTPError:

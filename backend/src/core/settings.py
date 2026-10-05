@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     LLM_MODEL: str = ""
     LLM_TIMEOUT: float = 30.0
 
+    # Shared outbound HTTP (src.core.http): retry with backoff on timeouts/5xx
+    HTTP_TIMEOUT: float = 10.0
+    HTTP_MAX_RETRIES: int = 2
+    HTTP_BACKOFF_BASE: float = 0.5
+
     # Redis (local instance; Taskiq broker and job state)
     REDIS_URL: str = "redis://localhost:6379/0"
     REDIS_MAX_CONNECTIONS: int = 10
