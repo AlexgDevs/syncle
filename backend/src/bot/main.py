@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher, Router
 
 from src.bot.errors import setup_error_handlers
 from src.bot.handlers import setup_handlers
-from src.bot.jobs import start_job_poller
+from src.bot.polling import start_job_poller
 from src.bot.middlewares import UserMiddleware
 from src.core.logging import setup_logging
 from src.core.redis import close_redis, init_redis

@@ -5,7 +5,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
 from src.bot.delivery import AiogramResultSink
-from src.bot.jobs import get_job_runner
+from src.bot.polling import get_job_runner
 from src.bot.keyboards.inline import back_menu, express_setup
 from src.bot.renderers import render_analysis_report
 from src.bot.texts import (
