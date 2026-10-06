@@ -9,7 +9,12 @@ from src.core.http import get_client
 from src.core.llm import LLMError, LLMProvider, get_llm_provider
 from src.core.settings import get_settings
 from src.modules.analytics.errors import CardParseError, UnsupportedMarketplaceError
-from src.modules.analytics.parsers import CardParser, WbParser, WbPriceSource
+from src.modules.analytics.parsers import (
+    CardParser,
+    OzonParser,
+    WbParser,
+    WbPriceSource,
+)
 from src.modules.analytics.prompts import (
     COMPARISON_MAX_TOKENS,
     COMPARISON_SYSTEM,
@@ -49,9 +54,15 @@ def _optimal_price(competitor_price: Decimal | None) -> Decimal | None:
 
 
 class ExpressAnalysisService:
-    def __init__(self, parser: CardParser, llm: LLMProvider | None = None) -> None:
+    def __init__(
+        self,
+        parser: CardParser,
+        llm: LLMProvider | None = None,
+        ozon_parser: CardParser | None = None,
+    ) -> None:
         self.parser = parser
         self.llm = llm
+        self._ozon_parser = ozon_parser
 
     async def compare_cards(
         self,
@@ -87,6 +98,10 @@ class ExpressAnalysisService:
             raise CardParseError(
                 f"Invalid or unsupported product source: {source.strip()!r}"
             )
+        if marketplace == "ozon":
+            if self._ozon_parser is None:
+                self._ozon_parser = OzonParser()
+            return await self._ozon_parser.parse(source)
         if marketplace != "wb":
             raise UnsupportedMarketplaceError(marketplace)
         return await self.parser.parse(source)

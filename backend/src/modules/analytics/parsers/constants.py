@@ -2,6 +2,11 @@ import re
 
 NM_FROM_URL = re.compile(r"/catalog/(\d+)/")
 
+# Ozon product slugs always end with the numeric article: both
+# /product/<slug>-<id>/ and the short /product/<id>/ match.
+OZON_PRODUCT_ID = re.compile(r"^/product/(?:[^/?#]*-)?(\d+)/?$")
+OZON_CATALOG_ID = re.compile(r"^/catalog/(\d+)/?$")
+
 BASKET_GUESSES: list[tuple[int, int]] = [
     (143, 1),
     (287, 2),
