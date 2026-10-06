@@ -15,3 +15,7 @@ class UnsupportedMarketplaceError(CardParseError):
     def __init__(self, marketplace: str) -> None:
         super().__init__(f"Marketplace {marketplace!r} is not supported yet.")
         self.marketplace = marketplace
+
+
+class OzonBrowserError(CardParseError):
+    """Ozon CDP browser session is unavailable."""

@@ -3,7 +3,7 @@ from typing import Any
 
 from playwright.async_api import Browser, Page, Playwright, async_playwright
 
-from src.modules.analytics.errors import CardParseError
+from src.modules.analytics.errors import OzonBrowserError
 
 OZON_ORIGIN = "https://www.ozon.ru"
 
@@ -40,17 +40,17 @@ class CdpJsonClient:
             try:
                 page = await self._page()
                 payload: dict[str, Any] = await page.evaluate(_FETCH_JS, url)
-            except CardParseError:
+            except OzonBrowserError:
                 raise
             except Exception as exc:
                 await self._teardown()
-                raise CardParseError(
+                raise OzonBrowserError(
                     "Ozon browser session failed while fetching data."
                 ) from exc
         status = payload.get("status")
         body = payload.get("body")
         if not isinstance(status, int) or not isinstance(body, str):
-            raise CardParseError("Ozon browser session returned an invalid response.")
+            raise OzonBrowserError("Ozon browser session returned an invalid response.")
         return status, body
 
     async def _page(self) -> Page:
@@ -71,7 +71,7 @@ class CdpJsonClient:
         except Exception:
             if not page.url.startswith(OZON_ORIGIN):
                 await page.close()
-                raise CardParseError(
+                raise OzonBrowserError(
                     "Ozon browser session could not open an Ozon page."
                 )
         return page
@@ -86,7 +86,7 @@ class CdpJsonClient:
             )
         except Exception as exc:
             await self._teardown()
-            raise CardParseError(
+            raise OzonBrowserError(
                 "Ozon browser session is unavailable: cannot connect to "
                 f"the CDP endpoint {self._endpoint!r}."
             ) from exc

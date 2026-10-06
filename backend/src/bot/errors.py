@@ -15,6 +15,7 @@ from aiogram.types import CallbackQuery, ErrorEvent, Message, Update
 from src.bot.texts import (
     CARD_NOT_FOUND,
     GENERIC_ERROR,
+    OZON_BROWSER_UNAVAILABLE,
     PARSE_FAILED,
     UNSUPPORTED_MARKETPLACE,
 )
@@ -22,6 +23,7 @@ from src.core.errors import SyncleError
 from src.modules.analytics.errors import (
     CardNotFoundError,
     CardParseError,
+    OzonBrowserError,
     UnsupportedMarketplaceError,
 )
 
@@ -31,6 +33,8 @@ logger = logging.getLogger(__name__)
 def describe_error(exc: Exception) -> str:
     if isinstance(exc, UnsupportedMarketplaceError):
         return UNSUPPORTED_MARKETPLACE.format(name=exc.marketplace.title())
+    if isinstance(exc, OzonBrowserError):
+        return OZON_BROWSER_UNAVAILABLE
     if isinstance(exc, CardNotFoundError):
         return CARD_NOT_FOUND
     if isinstance(exc, CardParseError):
