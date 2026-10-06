@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     PROXY_ROTATE_URL: str = ""  # HTTP endpoint that swaps the proxy IP
     OPTIMAL_PRICE_UNDERCUT_PCT: float = 3.0
 
+    # Reviews extraction (feedbacks2.wb.ru returns a single batch per
+    # request; the cap is applied client-side)
+    REVIEWS_CAP: int = 50
+
     @computed_field  # type: ignore
     @property
     def DATABASE_URL(self) -> PostgresDsn:
