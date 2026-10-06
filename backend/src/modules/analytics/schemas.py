@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 
 from pydantic import BaseModel
@@ -12,6 +13,22 @@ class CompetitorCard(BaseModel):
     price: Decimal | None = None
     rating: float | None = None
     feedbacks_count: int | None = None
+
+
+class Review(BaseModel):
+    """A single marketplace review.
+
+    Best effort: every field except ``review_id`` may be None when the
+    marketplace omits it or sends an unexpected value.
+    """
+
+    review_id: str
+    text: str | None = None
+    pros: str | None = None
+    cons: str | None = None
+    rating: int | None = None
+    date: datetime | None = None
+    author: str | None = None
 
 
 class AnalysisReport(BaseModel):
