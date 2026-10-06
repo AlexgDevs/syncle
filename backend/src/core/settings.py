@@ -53,6 +53,10 @@ class Settings(BaseSettings):
     PROXY_ROTATE_URL: str = ""  # HTTP endpoint that swaps the proxy IP
     OPTIMAL_PRICE_UNDERCUT_PCT: float = 3.0
 
+    # Ozon parsing goes through a real Edge session (CDP) because Ozon
+    # rejects plain HTTP clients with a JS bot challenge
+    OZON_CDP_URL: str = "http://127.0.0.1:9336"
+
     # Reviews extraction (feedbacks2.wb.ru returns a single batch per
     # request; the cap is applied client-side)
     REVIEWS_CAP: int = 50
