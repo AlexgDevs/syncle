@@ -22,3 +22,17 @@ class ResultSink(Protocol):
         (progress/status message); otherwise a new message is sent.
         """
         ...
+
+    async def deliver_file(
+        self,
+        chat_id: int,
+        caption: str,
+        data: bytes,
+        filename: str,
+        reply_markup: Any | None = None,
+    ) -> None:
+        """Deliver `data` as a document with `caption` to `chat_id`.
+
+        Used for reports that do not fit a single message (issue #43).
+        """
+        ...

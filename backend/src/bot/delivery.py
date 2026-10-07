@@ -2,7 +2,7 @@
 
 from aiogram import Bot
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.types import InlineKeyboardMarkup
+from aiogram.types import BufferedInputFile, InlineKeyboardMarkup
 
 
 class AiogramResultSink:
@@ -32,3 +32,18 @@ class AiogramResultSink:
                     return
                 # stale or uneditable status message: fall back to a new one
         await self._bot.send_message(chat_id, text, reply_markup=reply_markup)
+
+    async def deliver_file(
+        self,
+        chat_id: int,
+        caption: str,
+        data: bytes,
+        filename: str,
+        reply_markup: InlineKeyboardMarkup | None = None,
+    ) -> None:
+        await self._bot.send_document(
+            chat_id,
+            BufferedInputFile(data, filename=filename),
+            caption=caption,
+            reply_markup=reply_markup,
+        )

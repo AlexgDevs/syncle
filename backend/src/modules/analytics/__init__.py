@@ -2,6 +2,9 @@ from src.modules.analytics.enums import Axis, Stance
 from src.modules.analytics.schemas import (
     AnalysisReport,
     CompetitorCard,
+    NicheItem,
+    NicheReport,
+    NicheStats,
     PositioningInsight,
     Review,
 )
@@ -15,6 +18,9 @@ __all__ = [
     "Axis",
     "CompetitorCard",
     "ExpressAnalysisService",
+    "NicheItem",
+    "NicheReport",
+    "NicheStats",
     "PositioningInsight",
     "Review",
     "Stance",

@@ -12,8 +12,12 @@ from src.core.jobs.registry import register_job_handlers
 from src.modules.analytics import get_analytics_service
 
 ANALYSIS_JOB_TYPE = "analysis"
+NICHE_SCAN_JOB_TYPE = "niche_scan"
 
-ANALYSIS_RETRIES: dict[str, int] = {ANALYSIS_JOB_TYPE: 1}
+ANALYSIS_RETRIES: dict[str, int] = {
+    ANALYSIS_JOB_TYPE: 1,
+    NICHE_SCAN_JOB_TYPE: 1,
+}
 
 
 async def analysis_job(payload: dict[str, Any], context: JobContext) -> str:
@@ -30,7 +34,35 @@ async def analysis_job(payload: dict[str, Any], context: JobContext) -> str:
     return report.model_dump_json()
 
 
-ANALYSIS_HANDLERS: dict[str, JobHandler] = {ANALYSIS_JOB_TYPE: analysis_job}
+async def niche_scan_job(payload: dict[str, Any], context: JobContext) -> str:
+    """Deep niche scan (issue #43): search, aggregate, narrate.
+
+    Progress calls double as cancellation checkpoints; a failing
+    optional own card degrades inside the service instead of aborting.
+    """
+    query = payload.get("query")
+    if not isinstance(query, str) or not query.strip():
+        raise ValueError("payload.query is required")
+    marketplace = payload.get("marketplace")
+    if marketplace not in ("wb", "ozon"):
+        raise ValueError("payload.marketplace must be 'wb' or 'ozon'")
+    own = payload.get("own")
+    own_source = own if isinstance(own, str) and own.strip() else None
+
+    service = get_analytics_service()
+    report = await service.scan_niche(
+        marketplace,
+        query.strip(),
+        own_source=own_source,
+        on_progress=context.progress,
+    )
+    return report.model_dump_json()
+
+
+ANALYSIS_HANDLERS: dict[str, JobHandler] = {
+    ANALYSIS_JOB_TYPE: analysis_job,
+    NICHE_SCAN_JOB_TYPE: niche_scan_job,
+}
 
 
 def register_analytics_jobs() -> None:

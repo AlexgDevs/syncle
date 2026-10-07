@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Protocol
 
-from src.modules.analytics.schemas import CompetitorCard, Review
+from src.modules.analytics.schemas import CompetitorCard, NicheItem, Review
 
 
 class CardParser(Protocol):
@@ -29,3 +29,13 @@ class CardPriceSource(Protocol):
     """
 
     async def fetch_price(self, nm: int) -> Decimal | None: ...
+
+
+class NicheSearcher(Protocol):
+    """Returns listing items for a niche query, capped at ``limit``.
+
+    Prices are taken from the search payload only — the per-item price
+    source is never queried (it costs seconds per item).
+    """
+
+    async def search(self, query: str, limit: int) -> list[NicheItem]: ...

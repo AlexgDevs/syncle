@@ -13,6 +13,7 @@ from aiogram import Bot
 
 from src.bot.delivery import AiogramResultSink
 from src.bot.keyboards.inline import back_menu
+from src.bot.niche_delivery import deliver_niche_report
 from src.bot.renderers import render_analysis_report
 from src.bot.texts import (
     ANALYSIS_LOADING,
@@ -25,7 +26,8 @@ from src.core.jobs.taskiq_runner import TaskiqJobRunner
 from src.core.redis import get_redis
 from src.core.results import ResultSink
 from src.core.settings import get_settings
-from src.modules.analytics.schemas import AnalysisReport
+from src.modules.analytics.jobs import NICHE_SCAN_JOB_TYPE
+from src.modules.analytics.schemas import AnalysisReport, NicheReport
 
 logger = logging.getLogger(__name__)
 
@@ -103,14 +105,13 @@ class JobPoller:
         if self._progress_seen.get(info.id) == text:
             return
         message_id = _status_message_id(info)
-        if message_id is None or info.payload is None:
+        chat_id = _chat_id(info)
+        if message_id is None or chat_id is None:
             return
         try:
-            await self._sink.deliver(
-                int(info.payload["chat_id"]), text, edit_message_id=message_id
-            )
-        except KeyError, TypeError, ValueError:
-            logger.warning("job %s has no valid chat_id in payload", info.id)
+            await self._sink.deliver(chat_id, text, edit_message_id=message_id)
+        except Exception:  # noqa: BLE001
+            logger.warning("job %s progress delivery failed", info.id)
             return
         self._progress_seen[info.id] = text
 
@@ -118,15 +119,26 @@ class JobPoller:
         if not info.result:
             await self._deliver_terminal(info, JOB_FAILED)
             return
-        report = AnalysisReport.model_validate_json(info.result)
-        await self._deliver_terminal(info, render_analysis_report(report))
+        if info.job_type == NICHE_SCAN_JOB_TYPE:
+            report = NicheReport.model_validate_json(info.result)
+            chat_id = _chat_id(info)
+            if chat_id is None:
+                logger.warning("job %s has no valid chat_id in payload", info.id)
+                return
+            await deliver_niche_report(
+                self._sink,
+                chat_id,
+                report,
+                status_message_id=_status_message_id(info),
+                reply_markup=back_menu(),
+            )
+            return
+        analysis = AnalysisReport.model_validate_json(info.result)
+        await self._deliver_terminal(info, render_analysis_report(analysis))
 
     async def _deliver_terminal(self, info: JobInfo, text: str) -> None:
-        if info.payload is None:
-            return
-        try:
-            chat_id = int(info.payload["chat_id"])
-        except KeyError, TypeError, ValueError:
+        chat_id = _chat_id(info)
+        if chat_id is None:
             logger.warning("job %s has no valid chat_id in payload", info.id)
             return
         await self._sink.deliver(
@@ -141,6 +153,15 @@ class JobPoller:
         await redis.srem(active_jobs_key(), job_id)
         await redis.delete(job_key(job_id))
         self._progress_seen.pop(job_id, None)
+
+
+def _chat_id(info: JobInfo) -> int | None:
+    if info.payload is None:
+        return None
+    try:
+        return int(info.payload["chat_id"])
+    except KeyError, TypeError, ValueError:
+        return None
 
 
 def _status_message_id(info: JobInfo) -> int | None:

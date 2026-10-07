@@ -7,7 +7,11 @@ import httpx
 from src.core.settings import get_settings
 from src.modules.analytics.errors import CardNotFoundError, CardParseError
 from src.modules.analytics.parsers.base import CardPriceSource
-from src.modules.analytics.parsers.constants import BASKET_GUESSES, NM_FROM_URL
+from src.modules.analytics.parsers.constants import (
+    BASKET_GUESSES,
+    NM_FROM_URL,
+    WB_CARD_HOSTS,
+)
 from src.modules.analytics.schemas import CompetitorCard, Review
 
 
@@ -122,28 +126,40 @@ class WbParser:
         return int(match.group(1))
 
     async def _fetch_card_json(self, nm: int) -> dict[str, Any]:
+        """Return the raw ``card.json`` for an article.
+
+        Hosts come from ``WB_CARD_HOSTS``: the geo CDN first, the legacy
+        basket host only when the CDN does not answer at all. A live
+        response from the CDN (even a 404) means the card does not exist,
+        so the legacy probe would only add noise and latency.
+        """
         vol, part = nm // 100_000, nm // 1000
+        candidates = self._candidate_baskets(vol)
         saw_response = False
-        for basket in self._candidate_baskets(vol):
-            url = (
-                f"https://basket-{basket:02d}.wbbasket.ru"
-                f"/vol{vol}/part{part}/{nm}/info/ru/card.json"
-            )
-            try:
-                response = await self._client.get(url)
-            except httpx.HTTPError:
-                continue
-            saw_response = True
-            if response.status_code != 200:
-                continue
-            try:
-                data = response.json()
-            except ValueError:
-                continue
-            if not isinstance(data, dict) or not data:
-                continue
-            self._basket_by_vol[vol] = basket
-            return data
+        for host in WB_CARD_HOSTS:
+            host_responded = False
+            for basket in candidates:
+                url = (
+                    f"{host.format(basket=basket)}"
+                    f"/vol{vol}/part{part}/{nm}/info/ru/card.json"
+                )
+                try:
+                    response = await self._client.get(url)
+                except httpx.HTTPError:
+                    continue
+                saw_response = host_responded = True
+                if response.status_code != 200:
+                    continue
+                try:
+                    data = response.json()
+                except ValueError:
+                    continue
+                if not isinstance(data, dict) or not data:
+                    continue
+                self._basket_by_vol[vol] = basket
+                return data
+            if host_responded:
+                break
         if not saw_response:
             raise CardParseError("Wildberries service is unavailable, try again later.")
         raise CardNotFoundError(f"Product with article {nm} was not found.")
