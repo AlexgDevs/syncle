@@ -19,3 +19,7 @@ class UnsupportedMarketplaceError(CardParseError):
 
 class OzonBrowserError(CardParseError):
     """Ozon CDP browser session is unavailable."""
+
+
+class NicheSearchError(SyncleError):
+    """Failed to fetch or parse a niche listing."""

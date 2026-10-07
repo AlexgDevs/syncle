@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     # request; the cap is applied client-side)
     REVIEWS_CAP: int = 50
 
+    # Deep niche scan (#39): listing items per marketplace. WB serves 100
+    # items per search page, Ozon 8 per tile page (4 pages cover the cap).
+    NICHE_ITEM_CAP: int = 30
+
     @computed_field  # type: ignore
     @property
     def DATABASE_URL(self) -> PostgresDsn:
