@@ -22,6 +22,7 @@ from src.modules.analytics.prompts import (
     build_comparison_prompt,
 )
 from src.modules.analytics.schemas import AnalysisReport, CompetitorCard
+from src.modules.analytics.recommendations import positioning_recommendations
 from src.modules.analytics.seo_diff import missed_seo_keys
 from src.modules.analytics.weakness import parse_weaknesses
 
@@ -86,6 +87,9 @@ class ExpressAnalysisService:
         report.optimal_price = _optimal_price(rival.price)
         if own is not None:
             report.missed_seo_keys = missed_seo_keys(own, rival)
+            report.positioning = positioning_recommendations(
+                own, rival, report.missed_seo_keys
+            )
             await progress("analyzing_content")
             report.content_weaknesses = await self._content_weaknesses(
                 own, rival, report.missed_seo_keys
