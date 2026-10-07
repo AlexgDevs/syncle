@@ -8,7 +8,6 @@ from src.bot.texts import GREETING, MENU_TITLES, STUB_TEXT
 router = Router(name="menu")
 
 STUB_TITLES = {
-    "deep_scan": "Глубокий скан ниши",
     "unit_calc": "Быстрый расчёт",
     "weekly_report": "Отчёт WB/Ozon",
     "review_audit": "Аудит отзывов",

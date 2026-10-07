@@ -1,6 +1,11 @@
 from decimal import Decimal
 
-from src.modules.analytics import AnalysisReport, CompetitorCard, PositioningInsight
+from src.modules.analytics import (
+    AnalysisReport,
+    CompetitorCard,
+    NicheReport,
+    PositioningInsight,
+)
 
 NO_DATA = "—"
 PRICE_UNAVAILABLE = "недоступна"
@@ -192,3 +197,111 @@ def render_analysis_report(report: AnalysisReport) -> str:
     else:
         text = _render_single(report)
     return _clamp(text, REPORT_LIMIT)
+
+
+NICHE_REPORT = (
+    "🔍 Глубокий скан ниши «{query}» · {mp}\n\n"
+    "В выборке: {total} товаров\n"
+    "💰 Цены: {prices} (покрытие {coverage}%)\n"
+    "{price_bands}"
+    "⭐ Средний рейтинг: {rating} (у {rating_count} товаров)\n"
+    "💬 Отзывов: {feedbacks} всего, максимум у одного товара: {feedbacks_max}\n"
+    "{feedback_bands}"
+    "🏷 Топ брендов: {brands}\n"
+    "🔑 Ключевые слова: {words}"
+    "{insights}"
+)
+
+NICHE_PRICES = "от {low} до {high}, средняя {avg}"
+
+NICHE_PRICES_NONE = "нет данных по ценам"
+
+NICHE_PRICE_BAND = "   • {low}–{high}: {count} шт\n"
+
+NICHE_PRICE_BAND_LAST = "   • от {low}: {count} шт\n"
+
+NICHE_FEEDBACK_BAND = "   • отзывов {label}: {count} шт\n"
+
+NICHE_INSIGHTS = "\n💡 Выводы:\n{items}"
+
+NICHE_NO_INSIGHTS = "\n💡 Выводы: LLM временно недоступен — сводка выше."
+
+NICHE_FILE_CAPTION = "📄 Полный отчёт по нише «{query}»"
+
+
+def _niche_prices(report: NicheReport) -> str:
+    stats = report.stats
+    if stats.price_min is None or stats.price_max is None:
+        return NICHE_PRICES_NONE
+    return NICHE_PRICES.format(
+        low=stats.price_min, high=stats.price_max, avg=stats.price_avg
+    )
+
+
+def _niche_price_bands(report: NicheReport) -> str:
+    lines = []
+    bands = report.stats.price_bands
+    for index, band in enumerate(bands):
+        if band.high is None or index == len(bands) - 1:
+            lines.append(NICHE_PRICE_BAND_LAST.format(low=band.low, count=band.count))
+        else:
+            lines.append(
+                NICHE_PRICE_BAND.format(low=band.low, high=band.high, count=band.count)
+            )
+    return "".join(lines)
+
+
+def _niche_feedback_bands(report: NicheReport) -> str:
+    lines = []
+    for band in report.stats.feedback_bands:
+        label = (
+            "0"
+            if band.high == 0
+            else (f"{band.low}+" if band.high is None else f"{band.low}–{band.high}")
+        )
+        lines.append(NICHE_FEEDBACK_BAND.format(label=label, count=band.count))
+    return "".join(lines)
+
+
+def render_niche_report(report: NicheReport, limit: int | None = REPORT_LIMIT) -> str:
+    """Renders the niche scan report; ``limit=None`` keeps the full text."""
+    stats = report.stats
+    mp_name = {"wb": "Wildberries", "ozon": "Ozon"}.get(
+        report.marketplace, report.marketplace
+    )
+    brands = (
+        " · ".join(f"{b.brand} ({b.count})" for b in stats.brand_mix)
+        if stats.brand_mix
+        else NO_DATA
+    )
+    words = (
+        " · ".join(f"{w.word} ({w.count})" for w in stats.top_title_words)
+        if stats.top_title_words
+        else NO_DATA
+    )
+    if report.insights:
+        items = "\n".join(f"• {item}" for item in report.insights)
+        insights = NICHE_INSIGHTS.format(items=items)
+    else:
+        insights = NICHE_NO_INSIGHTS
+    text = NICHE_REPORT.format(
+        query=report.query,
+        mp=mp_name,
+        total=stats.total_items,
+        prices=_niche_prices(report),
+        coverage=round(stats.price_coverage * 100),
+        price_bands=_niche_price_bands(report),
+        rating=stats.rating_avg if stats.rating_avg is not None else NO_DATA,
+        rating_count=stats.rating_count,
+        feedbacks=stats.feedbacks_total,
+        feedbacks_max=(
+            stats.feedbacks_max if stats.feedbacks_max is not None else NO_DATA
+        ),
+        feedback_bands=_niche_feedback_bands(report),
+        brands=brands,
+        words=words,
+        insights=insights,
+    )
+    if limit is None:
+        return text
+    return _clamp(text, limit)

@@ -9,19 +9,32 @@ from src.core.http import get_client
 from src.core.llm import LLMError, LLMProvider, get_llm_provider
 from src.core.settings import get_settings
 from src.modules.analytics.errors import CardParseError, UnsupportedMarketplaceError
+from src.modules.analytics.niche import build_niche_stats, parse_insights
 from src.modules.analytics.parsers import (
     CardParser,
+    NicheSearcher,
     OzonParser,
+    OzonSearcher,
     WbParser,
     WbPriceSource,
+    WbSearcher,
 )
 from src.modules.analytics.prompts import (
     COMPARISON_MAX_TOKENS,
     COMPARISON_SYSTEM,
     COMPARISON_TEMPERATURE,
+    NICHE_MAX_TOKENS,
+    NICHE_SYSTEM,
+    NICHE_TEMPERATURE,
     build_comparison_prompt,
+    build_niche_prompt,
 )
-from src.modules.analytics.schemas import AnalysisReport, CompetitorCard
+from src.modules.analytics.schemas import (
+    AnalysisReport,
+    CompetitorCard,
+    NicheReport,
+    NicheStats,
+)
 from src.modules.analytics.recommendations import positioning_recommendations
 from src.modules.analytics.seo_diff import missed_seo_keys
 from src.modules.analytics.weakness import parse_weaknesses
@@ -60,10 +73,14 @@ class ExpressAnalysisService:
         parser: CardParser,
         llm: LLMProvider | None = None,
         ozon_parser: CardParser | None = None,
+        wb_searcher: NicheSearcher | None = None,
+        ozon_searcher: NicheSearcher | None = None,
     ) -> None:
         self.parser = parser
         self.llm = llm
         self._ozon_parser = ozon_parser
+        self._wb_searcher = wb_searcher
+        self._ozon_searcher = ozon_searcher
 
     async def compare_cards(
         self,
@@ -110,6 +127,78 @@ class ExpressAnalysisService:
             raise UnsupportedMarketplaceError(marketplace)
         return await self.parser.parse(source)
 
+    async def scan_niche(
+        self,
+        marketplace: str,
+        query: str,
+        own_source: str | None = None,
+        on_progress: Callable[[str], Awaitable[None]] | None = None,
+    ) -> NicheReport:
+        """Deep niche scan (issues #39..#42): search, aggregate, narrate.
+
+        The listing comes from a single search request per marketplace —
+        per-item price/card fetches are deliberately avoided (seconds per
+        item). A failing optional own card degrades to a niche-only
+        narrative instead of aborting the job.
+        """
+
+        async def progress(step: str) -> None:
+            if on_progress is not None:
+                await on_progress(step)
+
+        searcher = self._niche_searcher(marketplace)
+        await progress("searching_niche")
+        items = await searcher.search(query, get_settings().NICHE_ITEM_CAP)
+        stats = build_niche_stats(items)
+        own: CompetitorCard | None = None
+        if own_source is not None:
+            await progress("parsing_cards")
+            try:
+                own = await self._fetch_card(own_source)
+            except CardParseError as exc:
+                logger.warning("niche own card degraded: %s", type(exc).__name__)
+        await progress("analyzing_niche")
+        insights = await self._niche_insights(query, marketplace, stats, own)
+        return NicheReport(
+            query=query,
+            marketplace=marketplace,
+            stats=stats,
+            insights=insights,
+        )
+
+    def _niche_searcher(self, marketplace: str) -> NicheSearcher:
+        if marketplace == "wb":
+            if self._wb_searcher is None:
+                self._wb_searcher = WbSearcher()
+            return self._wb_searcher
+        if marketplace == "ozon":
+            if self._ozon_searcher is None:
+                self._ozon_searcher = OzonSearcher()
+            return self._ozon_searcher
+        raise UnsupportedMarketplaceError(marketplace)
+
+    async def _niche_insights(
+        self,
+        query: str,
+        marketplace: str,
+        stats: NicheStats,
+        own: CompetitorCard | None,
+    ) -> list[str]:
+        if self.llm is None or stats.total_items == 0:
+            return []
+        prompt = build_niche_prompt(query, marketplace, stats, own)
+        try:
+            raw = await self.llm.complete(
+                prompt,
+                system=NICHE_SYSTEM,
+                temperature=NICHE_TEMPERATURE,
+                max_tokens=NICHE_MAX_TOKENS,
+            )
+        except LLMError as exc:
+            logger.warning("LLM niche narrative degraded: %s", type(exc).__name__)
+            return []
+        return parse_insights(raw)
+
     async def _content_weaknesses(
         self, own: CompetitorCard, rival: CompetitorCard, missed_keys: list[str]
     ) -> list[str]:
@@ -137,4 +226,6 @@ def get_analytics_service() -> ExpressAnalysisService:
             feedbacks_client=get_client("feedbacks"),
         ),
         llm=get_llm_provider(),
+        wb_searcher=WbSearcher(),
+        ozon_searcher=OzonSearcher(),
     )

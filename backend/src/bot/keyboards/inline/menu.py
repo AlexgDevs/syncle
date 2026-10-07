@@ -13,7 +13,7 @@ MAIN_ROWS = [
 MENU_ROWS = {
     "niche": [
         [("⚡ Экспресс-анализ конкурента", "scene:express")],
-        [("🔍 Глубокий скан ниши", "stub:deep_scan")],
+        [("🔍 Глубокий скан ниши", "scene:deep_scan")],
     ],
     "finance": [
         [("🧮 Быстрый расчёт", "stub:unit_calc")],
@@ -53,3 +53,16 @@ def back_menu() -> InlineKeyboardMarkup:
 
 def express_setup() -> InlineKeyboardMarkup:
     return _build([[(BTN_SKIP, "scene:express:skip")], [(BACK_TO_MENU, "menu:main")]])
+
+
+def deep_scan_mp() -> InlineKeyboardMarkup:
+    return _build(
+        [
+            [("Wildberries", "scene:deep:mp:wb"), ("Ozon", "scene:deep:mp:ozon")],
+            [(BACK_TO_MENU, "menu:main")],
+        ]
+    )
+
+
+def deep_scan_own_setup() -> InlineKeyboardMarkup:
+    return _build([[(BTN_SKIP, "scene:deep:skip")], [(BACK_TO_MENU, "menu:main")]])
