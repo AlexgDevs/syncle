@@ -55,3 +55,13 @@ BASKET_GUESSES: list[tuple[int, int]] = [
     (13445, 45),
     (14213, 46),
 ]
+
+# WB moved card.json from basket-XX.wbbasket.ru (now HTML 404 on every
+# shard for every article) to a geo CDN. The first host is authoritative;
+# the legacy host is only tried when the CDN does not answer at all
+# (network/geo failure), so a live 404 from the CDN means the card does
+# not exist and the legacy probe would only add noise.
+WB_CARD_HOSTS: list[str] = [
+    "https://mow-basket-cdn-{basket:02d}.geobasket.ru",
+    "https://basket-{basket:02d}.wbbasket.ru",
+]
