@@ -6,6 +6,7 @@ from src.modules.analytics import (
     NicheReport,
     PositioningInsight,
 )
+from src.modules.analytics.enums import MARKETPLACE_TITLES
 
 NO_DATA = "—"
 PRICE_UNAVAILABLE = "недоступна"
@@ -266,9 +267,7 @@ def _niche_feedback_bands(report: NicheReport) -> str:
 def render_niche_report(report: NicheReport, limit: int | None = REPORT_LIMIT) -> str:
     """Renders the niche scan report; ``limit=None`` keeps the full text."""
     stats = report.stats
-    mp_name = {"wb": "Wildberries", "ozon": "Ozon"}.get(
-        report.marketplace, report.marketplace
-    )
+    mp_name = MARKETPLACE_TITLES.get(report.marketplace, report.marketplace)
     brands = (
         " · ".join(f"{b.brand} ({b.count})" for b in stats.brand_mix)
         if stats.brand_mix

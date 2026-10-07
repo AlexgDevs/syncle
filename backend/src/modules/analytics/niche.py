@@ -4,11 +4,11 @@ No I/O here: the functions take the items collected by a searcher and
 return display-ready statistics for the report and the LLM prompt.
 """
 
-import json
 import re
 from collections import Counter
 from decimal import Decimal, ROUND_HALF_UP
 
+from src.modules.analytics.llm_output import parse_json_list
 from src.modules.analytics.schemas import (
     BrandShare,
     FeedbackBand,
@@ -17,6 +17,7 @@ from src.modules.analytics.schemas import (
     PriceBand,
     WordCount,
 )
+from src.modules.analytics.text_constants import STOP_WORDS
 
 _BRAND_TOP = 10
 _WORDS_TOP = 15
@@ -28,158 +29,6 @@ _WORD_RE = re.compile(r"[а-яёa-z0-9]+", re.IGNORECASE)
 
 # Fixed review-count intervals: (low, high); high None = open-ended.
 _FEEDBACK_EDGES = ((0, 0), (1, 10), (11, 100), (101, 1000), (1001, None))
-
-_STOP_WORDS = frozenset(
-    {
-        # Russian
-        "без",
-        "более",
-        "был",
-        "быть",
-        "вам",
-        "вас",
-        "вдруг",
-        "ведь",
-        "вот",
-        "все",
-        "всего",
-        "вы",
-        "где",
-        "год",
-        "да",
-        "даже",
-        "для",
-        "до",
-        "его",
-        "ее",
-        "если",
-        "еще",
-        "же",
-        "за",
-        "и",
-        "из",
-        "или",
-        "им",
-        "их",
-        "к",
-        "как",
-        "какая",
-        "какой",
-        "когда",
-        "конечно",
-        "кто",
-        "куда",
-        "ли",
-        "лучше",
-        "между",
-        "меня",
-        "мне",
-        "много",
-        "мог",
-        "мой",
-        "мочь",
-        "на",
-        "над",
-        "надо",
-        "наконец",
-        "наш",
-        "не",
-        "него",
-        "нее",
-        "нет",
-        "ни",
-        "нибудь",
-        "никогда",
-        "ним",
-        "них",
-        "но",
-        "новый",
-        "нужно",
-        "о",
-        "об",
-        "один",
-        "он",
-        "она",
-        "они",
-        "оно",
-        "опять",
-        "от",
-        "перед",
-        "по",
-        "под",
-        "после",
-        "потом",
-        "потому",
-        "почему",
-        "при",
-        "про",
-        "раз",
-        "разве",
-        "с",
-        "сам",
-        "свое",
-        "себе",
-        "себя",
-        "сегодня",
-        "сейчас",
-        "сказал",
-        "сколько",
-        "со",
-        "совсем",
-        "стал",
-        "стать",
-        "так",
-        "такой",
-        "там",
-        "тебя",
-        "тем",
-        "теперь",
-        "то",
-        "тогда",
-        "того",
-        "тоже",
-        "только",
-        "том",
-        "тот",
-        "три",
-        "тут",
-        "ты",
-        "у",
-        "уже",
-        "хорошо",
-        "хоть",
-        "чего",
-        "человек",
-        "чем",
-        "через",
-        "что",
-        "чтоб",
-        "чтобы",
-        "чуть",
-        "эта",
-        "эти",
-        "это",
-        "этого",
-        "этой",
-        "этом",
-        "этот",
-        "эту",
-        "я",
-        # English / numbers commonly seen in titles
-        "the",
-        "and",
-        "for",
-        "with",
-        "from",
-        "new",
-        "pro",
-        "plus",
-        "set",
-        "mm",
-        "sm",
-        "kg",
-    }
-)
 
 
 def build_niche_stats(items: list[NicheItem]) -> NicheStats:
@@ -194,7 +43,7 @@ def build_niche_stats(items: list[NicheItem]) -> NicheStats:
         for i in items
         if i.title is not None
         for word in _WORD_RE.findall(i.title)
-        if len(word) >= _MIN_WORD_LEN and word.lower() not in _STOP_WORDS
+        if len(word) >= _MIN_WORD_LEN and word.lower() not in STOP_WORDS
     )
     return NicheStats(
         total_items=total,
@@ -271,15 +120,8 @@ def parse_insights(raw: str) -> list[str]:
     Degrades to an empty list on any malformed payload — the report then
     renders without the narrative block.
     """
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.removeprefix("```json").removeprefix("```").removesuffix("```")
-    try:
-        data = json.loads(text)
-    except json.JSONDecodeError:
-        return []
-    items = data.get("insights") if isinstance(data, dict) else None
-    if not isinstance(items, list):
+    items = parse_json_list(raw, "insights")
+    if not items:
         return []
     insights: list[str] = []
     for item in items:

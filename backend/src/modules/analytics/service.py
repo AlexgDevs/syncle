@@ -1,13 +1,14 @@
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from urllib.parse import urlparse
+from functools import lru_cache
 
 from decimal import Decimal, ROUND_HALF_UP
 
 from src.core.http import get_client
 from src.core.llm import LLMError, LLMProvider, get_llm_provider
 from src.core.settings import get_settings
+from src.modules.analytics.enums import Marketplace
 from src.modules.analytics.errors import CardParseError, UnsupportedMarketplaceError
 from src.modules.analytics.niche import build_niche_stats, parse_insights
 from src.modules.analytics.parsers import (
@@ -19,6 +20,7 @@ from src.modules.analytics.parsers import (
     WbPriceSource,
     WbSearcher,
 )
+from src.modules.analytics.parsers.source import parse_source
 from src.modules.analytics.prompts import (
     COMPARISON_MAX_TOKENS,
     COMPARISON_SYSTEM,
@@ -44,16 +46,15 @@ logger = logging.getLogger(__name__)
 _PRICE_QUANT = Decimal("0.01")
 
 
-def _detect_marketplace(source: str) -> str | None:
-    value = source.strip()
-    if value.isdigit():
-        return "wb"
-    parsed = urlparse(value if "://" in value else f"https://{value}")
+def _detect_marketplace(source: str) -> Marketplace | None:
+    _, parsed = parse_source(source)
+    if parsed is None:
+        return Marketplace.WB
     host = parsed.netloc.lower()
     if "wildberries" in host or host.endswith(".wb.ru"):
-        return "wb"
+        return Marketplace.WB
     if "ozon" in host:
-        return "ozon"
+        return Marketplace.OZON
     return None
 
 
@@ -119,12 +120,12 @@ class ExpressAnalysisService:
             raise CardParseError(
                 f"Invalid or unsupported product source: {source.strip()!r}"
             )
-        if marketplace == "ozon":
+        if marketplace is Marketplace.OZON:
             if self._ozon_parser is None:
                 self._ozon_parser = OzonParser()
             return await self._ozon_parser.parse(source)
-        if marketplace != "wb":
-            raise UnsupportedMarketplaceError(marketplace)
+        if marketplace is not Marketplace.WB:
+            raise UnsupportedMarketplaceError(str(marketplace))
         return await self.parser.parse(source)
 
     async def scan_niche(
@@ -167,11 +168,11 @@ class ExpressAnalysisService:
         )
 
     def _niche_searcher(self, marketplace: str) -> NicheSearcher:
-        if marketplace == "wb":
+        if marketplace == Marketplace.WB:
             if self._wb_searcher is None:
                 self._wb_searcher = WbSearcher()
             return self._wb_searcher
-        if marketplace == "ozon":
+        if marketplace == Marketplace.OZON:
             if self._ozon_searcher is None:
                 self._ozon_searcher = OzonSearcher()
             return self._ozon_searcher
@@ -218,7 +219,9 @@ class ExpressAnalysisService:
         return parse_weaknesses(raw)
 
 
+@lru_cache
 def get_analytics_service() -> ExpressAnalysisService:
+    """Process-wide singleton: adapters share parsers and the CDP session."""
     return ExpressAnalysisService(
         parser=WbParser(
             get_client("basket"),

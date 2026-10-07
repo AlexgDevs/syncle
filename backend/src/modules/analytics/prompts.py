@@ -3,6 +3,7 @@
 TODO(F15): move to a versioned prompt registry shared by all modules.
 """
 
+from src.modules.analytics.enums import MARKETPLACE_TITLES
 from src.modules.analytics.schemas import CompetitorCard, NicheStats
 
 COMPARISON_SYSTEM = (
@@ -86,7 +87,7 @@ def build_niche_prompt(
     own: CompetitorCard | None = None,
 ) -> str:
     """Builds the niche insights prompt (issue #42) from aggregated stats."""
-    mp_name = {"wb": "Wildberries", "ozon": "Ozon"}.get(marketplace, marketplace)
+    mp_name = MARKETPLACE_TITLES.get(marketplace, marketplace)
     if stats.price_min is not None and stats.price_max is not None:
         prices = (
             f"от {stats.price_min} до {stats.price_max}, " f"средняя {stats.price_avg}"
