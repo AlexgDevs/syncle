@@ -1,8 +1,8 @@
 """Result delivery abstraction (issue #9).
 
 Both the fast (awaited) path and the background-job path deliver user
-facing results through the same port; the bot provides an aiogram
-adapter (`src.bot.delivery.AiogramResultSink`).
+facing results through the same port; the aiogram adapter implements
+it for Telegram.
 """
 
 from typing import Any, Protocol

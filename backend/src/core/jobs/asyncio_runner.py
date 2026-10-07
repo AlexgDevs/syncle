@@ -2,8 +2,9 @@
 
 Runs jobs in-process with `asyncio.create_task`, keeps job state in
 memory, supports cancellation via cooperative checkpoints and a
-configurable retry count per job type. Used for the fast (awaited)
-path and tests; the Taskiq adapter is the long-path implementation.
+configurable retry count per job type. Kept as the in-process
+reference runner (stub for future in-process mode); the Taskiq adapter
+is the production path.
 """
 
 import asyncio

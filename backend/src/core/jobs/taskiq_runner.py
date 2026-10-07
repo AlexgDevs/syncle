@@ -2,14 +2,17 @@
 
 The broker and the ``run_analysis`` task live here so that both the
 bot (submit path) and the worker (execution path) share a single task
-definition. Job state (progress, terminal state, result) is stored in
-a Redis hash; the bot's poller picks it up and delivers the report
-through a `ResultSink`.
+definition. The broker itself is built lazily (``get_broker``), so
+importing this module for ``TaskiqJobRunner`` does not touch settings
+or construct taskiq objects. Job state (progress, terminal state,
+result) is stored in a Redis hash; the bot's poller picks it up and
+delivers the report through a `ResultSink`.
 """
 
 import asyncio
 import logging
 import uuid
+from functools import cache
 from typing import Any
 
 from taskiq_redis import ListQueueBroker
@@ -31,12 +34,20 @@ logger = logging.getLogger(__name__)
 ANALYSIS_TASK_NAME = "run_analysis"
 JOB_TTL_SECONDS = 24 * 60 * 60
 
-_settings = get_settings()
-# Job state/results live in our own Redis hash (see TaskiqJobRunner),
-# so the broker needs no taskiq result backend.
-broker = ListQueueBroker(_settings.REDIS_URL)
-
 _TERMINAL_STATES = frozenset({JobState.DONE, JobState.FAILED, JobState.CANCELLED})
+
+
+@cache
+def get_broker() -> ListQueueBroker:
+    """Broker singleton with the ``run_analysis`` task registered.
+
+    Job state/results live in our own Redis hash (see TaskiqJobRunner),
+    so the broker needs no taskiq result backend. The worker exports the
+    result as ``src.worker.app:broker``; the bot builds it on first submit.
+    """
+    broker = ListQueueBroker(get_settings().REDIS_URL)
+    broker.register_task(run_analysis_task, task_name=ANALYSIS_TASK_NAME)
+    return broker
 
 
 class _RedisJobContext:
@@ -72,9 +83,11 @@ async def _mark_cancelled(job_id: str) -> bool:
     return True
 
 
-@broker.task(task_name=ANALYSIS_TASK_NAME)
 async def run_analysis_task(job_id: str) -> None:
-    """Worker entry point: run the registered handler for the job."""
+    """Worker entry point: run the registered handler for the job.
+
+    Registered on the broker by ``get_broker()`` (bot submit / worker start).
+    """
     from src.core.redis import get_redis
 
     redis = get_redis()
@@ -153,7 +166,10 @@ class TaskiqJobRunner:
         )
         await self._redis.expire(job_key(job_id), JOB_TTL_SECONDS)
         await self._redis.sadd(active_jobs_key(), job_id)
-        await run_analysis_task.kiq(job_id)
+        task = get_broker().find_task(ANALYSIS_TASK_NAME)
+        if task is None:
+            raise RuntimeError(f"task {ANALYSIS_TASK_NAME!r} is not registered")
+        await task.kiq(job_id)
         logger.info("job %s (%s) submitted", job_id, job_type)
         return job_id
 
