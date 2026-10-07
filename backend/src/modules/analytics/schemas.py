@@ -3,6 +3,8 @@ from decimal import Decimal
 
 from pydantic import BaseModel
 
+from src.modules.analytics.enums import Axis, Stance
+
 
 class CompetitorCard(BaseModel):
     source: str
@@ -31,10 +33,26 @@ class Review(BaseModel):
     author: str | None = None
 
 
+class PositioningInsight(BaseModel):
+    """One comparison axis of the positioning block (issue #36).
+
+    Values are display-ready numbers (price, rating, keyword counts);
+    user-facing phrasing lives in the bot renderer.
+    """
+
+    axis: Axis
+    stance: Stance
+    own_value: str | None = None
+    rival_value: str | None = None
+    missed_count: int | None = None
+    exclusive_count: int | None = None
+
+
 class AnalysisReport(BaseModel):
     competitor: CompetitorCard
     own_card: CompetitorCard | None = None
     missed_seo_keys: list[str] = []
     content_weaknesses: list[str] = []
+    positioning: list[PositioningInsight] = []
     # Undercut heuristic: competitor price minus OPTIMAL_PRICE_UNDERCUT_PCT.
     optimal_price: Decimal | None = None

@@ -1,4 +1,10 @@
-from src.modules.analytics.schemas import AnalysisReport, CompetitorCard, Review
+from src.modules.analytics.enums import Axis, Stance
+from src.modules.analytics.schemas import (
+    AnalysisReport,
+    CompetitorCard,
+    PositioningInsight,
+    Review,
+)
 from src.modules.analytics.service import (
     ExpressAnalysisService,
     get_analytics_service,
@@ -6,8 +12,11 @@ from src.modules.analytics.service import (
 
 __all__ = [
     "AnalysisReport",
+    "Axis",
     "CompetitorCard",
     "ExpressAnalysisService",
+    "PositioningInsight",
     "Review",
+    "Stance",
     "get_analytics_service",
 ]

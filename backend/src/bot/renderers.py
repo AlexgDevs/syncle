@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from src.modules.analytics import AnalysisReport, CompetitorCard
+from src.modules.analytics import AnalysisReport, CompetitorCard, PositioningInsight
 
 NO_DATA = "—"
 PRICE_UNAVAILABLE = "недоступна"
@@ -24,7 +24,7 @@ COMPARISON_REPORT = (
     "📊 Сравнение карточек\n\n"
     "👤 Твоя карточка:\n{own}\n\n"
     "🏁 Конкурент:\n{rival}"
-    "{optimal}\n{missed}{weaknesses}"
+    "{optimal}\n{missed}{positioning}{weaknesses}"
 )
 
 CARD_BLOCK = (
@@ -36,6 +36,22 @@ MISSED_KEYS = "\n🔑 Упущенные SEO-ключи (есть у конку�
 MISSED_KEYS_EMPTY = "\n🔑 Упущенные SEO-ключи: не найдены — уже покрыты.\n"
 
 WEAKNESSES = "\n⚠️ Слабые места контента конкурента:\n{items}"
+
+POSITIONING = "\n\n🎯 Позиционирование:\n{items}\n"
+
+PRICE_AHEAD = "• Цена: выигрываешь — {own} ₽ против {rival} ₽"
+PRICE_BEHIND = "• Цена: проигрываешь — {own} ₽ против {rival} ₽"
+PRICE_EVEN = "• Цена: одинаковая — {own} ₽"
+PRICE_UNKNOWN = "• Цена: данных нет — совет по цене не даётся"
+
+KEYWORDS_AHEAD = "• Ключи: выигрываешь — {count}"
+KEYWORDS_BEHIND = "• Ключи: проигрываешь — {count}"
+KEYWORDS_EVEN = "• Ключи: полное совпадение — нет ни своих, ни упущенных"
+
+RATING_AHEAD = "• Рейтинг: выигрываешь — {own} против {rival}"
+RATING_BEHIND = "• Рейтинг: проигрываешь — {own} против {rival}"
+RATING_EVEN = "• Рейтинг: равный — {own}"
+RATING_UNKNOWN = "• Рейтинг: данных нет по одной из карточек"
 
 OPTIMAL_PRICE = "\n💡 Оптимальная цена для нас: {optimal} ₽{note}"
 
@@ -82,6 +98,53 @@ def _render_single(report: AnalysisReport) -> str:
     )
 
 
+def _plural_ru(count: int, one: str, few: str, many: str) -> str:
+    if count % 10 == 1 and count % 100 != 11:
+        return one
+    if 2 <= count % 10 <= 4 and not 12 <= count % 100 <= 14:
+        return few
+    return many
+
+
+def _positioning_line(insight: PositioningInsight) -> str:
+    own = insight.own_value or NO_DATA
+    rival = insight.rival_value or NO_DATA
+    if insight.axis == "price":
+        if insight.stance == "unknown":
+            return PRICE_UNKNOWN
+        template = {"ahead": PRICE_AHEAD, "behind": PRICE_BEHIND}.get(
+            insight.stance, PRICE_EVEN
+        )
+        return template.format(own=own, rival=rival)
+    if insight.axis == "keywords":
+        if insight.stance == "ahead":
+            count = insight.exclusive_count or 0
+            noun = _plural_ru(
+                count, "эксклюзивный ключ", "эксклюзивных ключа", "эксклюзивных ключей"
+            )
+            return KEYWORDS_AHEAD.format(count=f"{count} {noun}")
+        if insight.stance == "behind":
+            count = insight.missed_count or 0
+            noun = _plural_ru(
+                count, "упущенный ключ", "упущенных ключа", "упущенных ключей"
+            )
+            return KEYWORDS_BEHIND.format(count=f"{count} {noun}")
+        return KEYWORDS_EVEN
+    if insight.stance == "unknown":
+        return RATING_UNKNOWN
+    template = {"ahead": RATING_AHEAD, "behind": RATING_BEHIND}.get(
+        insight.stance, RATING_EVEN
+    )
+    return template.format(own=own, rival=rival)
+
+
+def _positioning_block(report: AnalysisReport) -> str:
+    if not report.positioning:
+        return ""
+    items = "\n".join(_positioning_line(insight) for insight in report.positioning)
+    return POSITIONING.format(items=items)
+
+
 def _optimal_block(report: AnalysisReport) -> str:
     optimal = report.optimal_price
     if optimal is None:
@@ -118,6 +181,7 @@ def _render_comparison(report: AnalysisReport) -> str:
         rival=_card_line(report.competitor),
         optimal=_optimal_block(report),
         missed=missed,
+        positioning=_positioning_block(report),
         weaknesses=weaknesses,
     )
 
