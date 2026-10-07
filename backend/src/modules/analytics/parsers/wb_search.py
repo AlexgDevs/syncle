@@ -18,20 +18,15 @@ from urllib.parse import quote
 
 from src.core.settings import get_settings
 from src.modules.analytics.errors import NicheSearchError
+from src.modules.analytics.parsers.browser import BrowserUnavailable, wb_browser_session
+from src.modules.analytics.parsers.coerce import as_float, as_int, as_str
+from src.modules.analytics.parsers.constants import WB_ORIGIN, wb_product_url
 from src.modules.analytics.schemas import NicheItem
 
 logger = logging.getLogger(__name__)
 
-_WB_ORIGIN = "https://www.wildberries.ru"
 _SEARCH_PATH = "/catalog/0/search.aspx?search="
 _U_SEARCH_MARKER = "__internal/u-search"
-_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
-)
-_HIDE_WEBDRIVER = (
-    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
-)
 _POLL_INTERVAL = 0.5
 
 
@@ -40,35 +35,16 @@ class WbSearcher:
 
     async def search(self, query: str, limit: int) -> list[NicheItem]:
         cfg = get_settings()
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError:
-            raise NicheSearchError(
-                "Playwright is not installed; Wildberries search is unavailable."
-            )
         if not cfg.PRICE_ENABLED:
             raise NicheSearchError("Browser scraping is disabled by settings.")
         timeout_ms = int(cfg.PRICE_TIMEOUT * 1000)
-        launch_kwargs: dict[str, Any] = {"headless": cfg.PRICE_HEADLESS}
-        if cfg.PROXY_URL:
-            launch_kwargs["proxy"] = {"server": cfg.PROXY_URL}
         try:
-            async with async_playwright() as playwright:
-                browser = await playwright.chromium.launch(**launch_kwargs)
-                try:
-                    context = await browser.new_context(
-                        locale="ru-RU",
-                        timezone_id="Europe/Moscow",
-                        user_agent=_USER_AGENT,
-                        viewport={"width": 1440, "height": 1000},
-                    )
-                    await context.add_init_script(_HIDE_WEBDRIVER)
-                    page = await context.new_page()
-                    return await self._collect(page, query, limit, timeout_ms)
-                finally:
-                    await browser.close()
+            async with wb_browser_session() as page:
+                return await self._collect(page, query, limit, timeout_ms)
         except NicheSearchError:
             raise
+        except BrowserUnavailable as exc:
+            raise NicheSearchError(str(exc)) from exc
         except Exception as exc:
             raise NicheSearchError("Wildberries search session failed.") from exc
 
@@ -85,7 +61,7 @@ class WbSearcher:
             asyncio.ensure_future(self._capture(response, hit))
 
         page.on("response", on_response)
-        url = f"{_WB_ORIGIN}{_SEARCH_PATH}{quote(query)}"
+        url = f"{WB_ORIGIN}{_SEARCH_PATH}{quote(query)}"
         await page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout_ms / 1000
@@ -129,12 +105,12 @@ def build_items(products: list[Any], limit: int) -> list[NicheItem]:
             continue
         items.append(
             NicheItem(
-                source=f"{_WB_ORIGIN}/catalog/{item_id}/detail.aspx",
-                title=_as_str(raw.get("name")),
-                brand=_as_str(raw.get("brand")),
+                source=wb_product_url(item_id),
+                title=as_str(raw.get("name")),
+                brand=as_str(raw.get("brand")),
                 price=_price(raw),
-                rating=_as_float(raw.get("reviewRating")),
-                feedbacks_count=_as_int(raw.get("feedbacks")),
+                rating=as_float(raw.get("reviewRating")),
+                feedbacks_count=as_int(raw.get("feedbacks")),
             )
         )
     return items
@@ -155,28 +131,3 @@ def _price(product: dict[str, Any]) -> Decimal | None:
         return None
     value = Decimal(kopecks) / 100
     return value if value > 0 else None
-
-
-def _as_str(value: Any) -> str | None:
-    if not isinstance(value, str):
-        return None
-    stripped = value.strip()
-    return stripped or None
-
-
-def _as_float(value: Any) -> float | None:
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value)
-        except ValueError:
-            return None
-    return None
-
-
-def _as_int(value: Any) -> int | None:
-    number = _as_float(value)
-    return int(number) if number is not None else None

@@ -4,8 +4,7 @@ from typing import Any
 from playwright.async_api import Browser, Page, Playwright, async_playwright
 
 from src.modules.analytics.errors import OzonBrowserError
-
-OZON_ORIGIN = "https://www.ozon.ru"
+from src.modules.analytics.parsers.constants import OZON_ORIGIN
 
 _FETCH_JS = """
 async (url) => {

@@ -1,17 +1,22 @@
-from datetime import datetime
 from typing import Any
-from urllib.parse import urlparse
 
 import httpx
 
 from src.core.settings import get_settings
 from src.modules.analytics.errors import CardNotFoundError, CardParseError
 from src.modules.analytics.parsers.base import CardPriceSource
+from src.modules.analytics.parsers.coerce import (
+    as_float,
+    as_int,
+    as_iso_datetime,
+    as_str,
+)
 from src.modules.analytics.parsers.constants import (
     BASKET_GUESSES,
     NM_FROM_URL,
     WB_CARD_HOSTS,
 )
+from src.modules.analytics.parsers.source import parse_source
 from src.modules.analytics.schemas import CompetitorCard, Review
 
 
@@ -42,9 +47,9 @@ class WbParser:
             brand=selling.get("brand_name"),
             category=data.get("subj_name"),
             price=price,
-            rating=self._as_float(feedbacks.get("valuation")) if feedbacks else None,
+            rating=as_float(feedbacks.get("valuation")) if feedbacks else None,
             feedbacks_count=(
-                self._as_int(feedbacks.get("feedbackCount")) if feedbacks else None
+                as_int(feedbacks.get("feedbackCount")) if feedbacks else None
             ),
         )
 
@@ -79,8 +84,8 @@ class WbParser:
                 break
         return reviews
 
-    @classmethod
-    def _to_review(cls, item: dict[str, Any]) -> Review | None:
+    @staticmethod
+    def _to_review(item: dict[str, Any]) -> Review | None:
         review_id = item.get("id")
         if not isinstance(review_id, str) or not review_id:
             return None
@@ -88,36 +93,19 @@ class WbParser:
         author = details.get("name") if isinstance(details, dict) else None
         return Review(
             review_id=review_id,
-            text=cls._as_str(item.get("text")),
-            pros=cls._as_str(item.get("pros")),
-            cons=cls._as_str(item.get("cons")),
-            rating=cls._as_int(item.get("productValuation")),
-            date=cls._as_datetime(item.get("createdDate")),
+            text=as_str(item.get("text")),
+            pros=as_str(item.get("pros")),
+            cons=as_str(item.get("cons")),
+            rating=as_int(item.get("productValuation")),
+            date=as_iso_datetime(item.get("createdDate")),
             author=author if isinstance(author, str) and author else None,
         )
 
     @staticmethod
-    def _as_str(value: Any) -> str | None:
-        if not isinstance(value, str):
-            return None
-        stripped = value.strip()
-        return stripped or None
-
-    @staticmethod
-    def _as_datetime(value: Any) -> datetime | None:
-        if not isinstance(value, str) or not value:
-            return None
-        try:
-            return datetime.fromisoformat(value.replace("Z", "+00:00"))
-        except ValueError:
-            return None
-
-    @staticmethod
     def _extract_nm(source: str) -> int:
-        value = source.strip()
-        if value.isdigit():
+        value, parsed = parse_source(source)
+        if parsed is None:
             return int(value)
-        parsed = urlparse(value if "://" in value else f"https://{value}")
         match = NM_FROM_URL.search(parsed.path)
         if match is None:
             raise CardParseError(
@@ -191,21 +179,3 @@ class WbParser:
             if vol <= upper:
                 return basket
         return 1
-
-    @staticmethod
-    def _as_float(value: Any) -> float | None:
-        if isinstance(value, bool) or value is None:
-            return None
-        if isinstance(value, (int, float)):
-            return float(value)
-        if isinstance(value, str):
-            try:
-                return float(value)
-            except ValueError:
-                return None
-        return None
-
-    @classmethod
-    def _as_int(cls, value: Any) -> int | None:
-        number = cls._as_float(value)
-        return int(number) if number is not None else None

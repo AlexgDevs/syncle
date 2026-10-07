@@ -1,24 +1,29 @@
 import json
-import re
-from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
 from typing import Any
-from urllib.parse import quote, urlparse
+from urllib.parse import quote
 
 from src.core.settings import get_settings
 from src.modules.analytics.errors import CardNotFoundError, CardParseError
 from src.modules.analytics.parsers.cdp import CdpJsonClient
-from src.modules.analytics.parsers.constants import OZON_CATALOG_ID, OZON_PRODUCT_ID
+from src.modules.analytics.parsers.coerce import (
+    as_float,
+    as_int,
+    as_str,
+    as_unix_datetime,
+    parse_price,
+)
+from src.modules.analytics.parsers.constants import (
+    OZON_CATALOG_ID,
+    OZON_PAGE_API,
+    OZON_PRODUCT_ID,
+    OZON_REVIEWS_API,
+)
+from src.modules.analytics.parsers.source import parse_source
 from src.modules.analytics.schemas import CompetitorCard, Review
-
-_PAGE_API = "https://www.ozon.ru/api/composer-api.bx/page/json/v2?url="
-_REVIEWS_API = "https://www.ozon.ru/api/entrypoint-api.bx/page/json/v2?url="
 
 # Reviews arrive in small server-driven pages; the client-side cap
 # (``REVIEWS_CAP``) stops pagination much earlier.
 _MAX_REVIEW_PAGES = 50
-
-_CHALLENGE_MARKERS = ("fab_chlg", "challengeURL", "incidentId")
 
 
 class OzonParser:
@@ -41,13 +46,13 @@ class OzonParser:
         score = self._state(states, "webReviewProductScore") or {}
         return CompetitorCard(
             source=source.strip(),
-            title=self._as_str(heading.get("title")),
+            title=as_str(heading.get("title")),
             description=self._seo_description(data),
             brand=self._brand(self._state(states, "webBrand") or {}),
             category=self._category(self._state(states, "breadCrumbs") or {}),
-            price=self._price(price_widget.get("price")),
-            rating=self._as_float(score.get("totalScore")),
-            feedbacks_count=self._as_int(score.get("reviewsCount")),
+            price=parse_price(price_widget.get("price")),
+            rating=as_float(score.get("totalScore")),
+            feedbacks_count=as_int(score.get("reviewsCount")),
         )
 
     async def get_reviews(self, source: str) -> list[Review]:
@@ -73,7 +78,7 @@ class OzonParser:
                 f"&layout_page_index={page}&tab=reviews"
             )
             status, body = await self._client.fetch_text(
-                _REVIEWS_API + quote(path, safe="")
+                OZON_REVIEWS_API + quote(path, safe="")
             )
             if status == 404:
                 if page == 1:
@@ -99,7 +104,9 @@ class OzonParser:
         return reviews
 
     async def _fetch_page(self, path: str, source: str) -> dict[str, Any]:
-        status, body = await self._client.fetch_text(_PAGE_API + quote(path, safe=""))
+        status, body = await self._client.fetch_text(
+            OZON_PAGE_API + quote(path, safe="")
+        )
         return self._decode(status, body, source)
 
     def _decode(self, status: int, body: str, source: str) -> dict[str, Any]:
@@ -198,19 +205,6 @@ class OzonParser:
         value = first.get("text")
         return value.strip() if isinstance(value, str) and value.strip() else None
 
-    @staticmethod
-    def _price(value: Any) -> Decimal | None:
-        if not isinstance(value, str):
-            return None
-        digits = re.sub(r"[^\d,.]", "", value).replace(",", ".")
-        if not digits:
-            return None
-        try:
-            price = Decimal(digits)
-        except InvalidOperation:
-            return None
-        return price if price > 0 else None
-
     @classmethod
     def _review_entries(cls, data: dict[str, Any]) -> tuple[list[Any], int | None]:
         states = cls._widget_states(data)
@@ -227,8 +221,8 @@ class OzonParser:
                 total = reported
         return entries, total
 
-    @classmethod
-    def _to_review(cls, item: dict[str, Any]) -> Review | None:
+    @staticmethod
+    def _to_review(item: dict[str, Any]) -> Review | None:
         review_id = item.get("uuid")
         if not isinstance(review_id, str) or not review_id:
             return None
@@ -236,23 +230,22 @@ class OzonParser:
         content = content if isinstance(content, dict) else {}
         author = item.get("author")
         author = author if isinstance(author, dict) else {}
-        name = cls._as_str(author.get("firstName")) or cls._as_str(author.get("fio"))
+        name = as_str(author.get("firstName")) or as_str(author.get("fio"))
         return Review(
             review_id=review_id,
-            text=cls._as_str(content.get("comment")),
-            pros=cls._as_str(content.get("positive")),
-            cons=cls._as_str(content.get("negative")),
-            rating=cls._as_int(content.get("score")),
-            date=cls._as_unix_datetime(item.get("updatedAt") or item.get("createdAt")),
+            text=as_str(content.get("comment")),
+            pros=as_str(content.get("positive")),
+            cons=as_str(content.get("negative")),
+            rating=as_int(content.get("score")),
+            date=as_unix_datetime(item.get("updatedAt") or item.get("createdAt")),
             author=name,
         )
 
     @staticmethod
     def _extract_path(source: str) -> str:
-        value = source.strip()
-        if value.isdigit():
+        value, parsed = parse_source(source)
+        if parsed is None:
             return f"/product/{value}/"
-        parsed = urlparse(value if "://" in value else f"https://{value}")
         path = parsed.path or "/"
         if OZON_PRODUCT_ID.match(path) or OZON_CATALOG_ID.match(path):
             return path
@@ -260,48 +253,11 @@ class OzonParser:
 
     @staticmethod
     def _extract_article(source: str) -> str:
-        value = source.strip()
-        if value.isdigit():
+        value, parsed = parse_source(source)
+        if parsed is None:
             return value
-        parsed = urlparse(value if "://" in value else f"https://{value}")
         path = parsed.path or "/"
         match = OZON_PRODUCT_ID.match(path) or OZON_CATALOG_ID.match(path)
         if match is None:
             raise CardParseError(f"Ozon article not found in the source: {value!r}")
         return match.group(1)
-
-    @staticmethod
-    def _as_str(value: Any) -> str | None:
-        if not isinstance(value, str):
-            return None
-        stripped = value.strip()
-        return stripped or None
-
-    @staticmethod
-    def _as_unix_datetime(value: Any) -> datetime | None:
-        if isinstance(value, bool) or not isinstance(value, (int, float)):
-            return None
-        if value <= 0:
-            return None
-        try:
-            return datetime.fromtimestamp(value, tz=timezone.utc)
-        except OverflowError, OSError, ValueError:
-            return None
-
-    @staticmethod
-    def _as_float(value: Any) -> float | None:
-        if isinstance(value, bool) or value is None:
-            return None
-        if isinstance(value, (int, float)):
-            return float(value)
-        if isinstance(value, str):
-            try:
-                return float(value)
-            except ValueError:
-                return None
-        return None
-
-    @classmethod
-    def _as_int(cls, value: Any) -> int | None:
-        number = cls._as_float(value)
-        return int(number) if number is not None else None

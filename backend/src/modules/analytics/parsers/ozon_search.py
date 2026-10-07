@@ -9,19 +9,23 @@ are walked until the requested limit is reached.
 import json
 import logging
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 from urllib.parse import quote
 
 from src.core.settings import get_settings
 from src.modules.analytics.errors import NicheSearchError
 from src.modules.analytics.parsers.cdp import CdpJsonClient
+from src.modules.analytics.parsers.coerce import as_float, as_str, parse_price
+from src.modules.analytics.parsers.constants import (
+    OZON_ORIGIN,
+    OZON_PAGE_API,
+    ozon_product_url,
+)
 from src.modules.analytics.schemas import NicheItem
 
 logger = logging.getLogger(__name__)
 
-_PAGE_API = "https://www.ozon.ru/api/composer-api.bx/page/json/v2?url="
-_OZON_ORIGIN = "https://www.ozon.ru"
 _MAX_PAGES = 10
 
 # "4.8"-like rating strings must not be mistaken for review counts.
@@ -54,7 +58,7 @@ class OzonSearcher:
         while len(items) < limit and page <= _MAX_PAGES:
             path = f"/search?text={quote(query)}&from_global=true&page={page}"
             status, body = await self._client.fetch_text(
-                _PAGE_API + quote(path, safe="")
+                OZON_PAGE_API + quote(path, safe="")
             )
             raw_items = self._tile_items(status, body)
             if not raw_items:
@@ -103,7 +107,7 @@ def _build_item(raw: Any) -> NicheItem | None:
     sku = raw.get("sku") if not isinstance(raw.get("sku"), bool) else None
     source: str | None
     if isinstance(sku, int):
-        source = f"{_OZON_ORIGIN}/product/{sku}/"
+        source = ozon_product_url(sku)
     else:
         source = _link(raw.get("action"))
     if source is None:
@@ -120,7 +124,7 @@ def _build_item(raw: Any) -> NicheItem | None:
         if kind == "priceV2":
             price = _price(entry.get("priceV2"))
         elif kind == "textDS" and entry.get("id") == "name":
-            title = _as_str((entry.get("textDS") or {}).get("text"))
+            title = as_str((entry.get("textDS") or {}).get("text"))
         elif kind == "labelListV2":
             widget = entry.get("labelListV2") or {}
             texts = _label_texts(widget)
@@ -145,14 +149,14 @@ def _link(action: Any) -> str | None:
     link = action.get("link")
     if not isinstance(link, str) or not link:
         return None
-    return _OZON_ORIGIN + link.split("?")[0]
+    return OZON_ORIGIN + link.split("?")[0]
 
 
 def _brand(texts: list[str]) -> str | None:
     """First label that is not a badge (e.g. 'Бренд проверен')."""
     for text in texts:
         if text.lower() not in _NON_BRAND_LABELS:
-            return _as_str(text)
+            return as_str(text)
     return None
 
 
@@ -170,7 +174,7 @@ def _label_texts(widget: dict[str, Any]) -> list[str]:
     for entry in entries if isinstance(entries, list) else []:
         if not isinstance(entry, dict) or entry.get("type") != "text":
             continue
-        text = _as_str((entry.get("text") or {}).get("text"))
+        text = as_str((entry.get("text") or {}).get("text"))
         if text:
             texts.append(text)
     return texts
@@ -182,7 +186,7 @@ def _rating_feedbacks(texts: list[str]) -> tuple[float | None, int | None]:
     for text in texts:
         cleaned = text.replace("\xa0", " ").replace("\u2009", " ").strip()
         if rating is None and "." in cleaned:
-            rating = _as_float(cleaned)
+            rating = as_float(cleaned)
             if rating is not None:
                 continue
         if feedbacks is None and not _FLOAT_RE.fullmatch(cleaned):
@@ -202,35 +206,5 @@ def _price(widget: dict[str, Any] | None) -> Decimal | None:
             continue
         if entry.get("textStyle") != "PRICE":
             continue
-        text = entry.get("text")
-        if not isinstance(text, str):
-            return None
-        digits = re.sub(r"[^\d,.]", "", text).replace(",", ".")
-        if not digits:
-            return None
-        try:
-            price = Decimal(digits)
-        except InvalidOperation:
-            return None
-        return price if price > 0 else None
-    return None
-
-
-def _as_str(value: Any) -> str | None:
-    if not isinstance(value, str):
-        return None
-    stripped = value.strip()
-    return stripped or None
-
-
-def _as_float(value: Any) -> float | None:
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value)
-        except ValueError:
-            return None
+        return parse_price(entry.get("text"))
     return None

@@ -16,12 +16,15 @@ Both degrade to None when the product page is missing or empty.
 import asyncio
 import logging
 import re
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any
 
 import httpx
 
 from src.core.settings import get_settings
+from src.modules.analytics.parsers.browser import BrowserUnavailable, wb_browser_session
+from src.modules.analytics.parsers.coerce import parse_price
+from src.modules.analytics.parsers.constants import wb_product_url
 
 logger = logging.getLogger(__name__)
 
@@ -39,33 +42,17 @@ _BODY_CUT_MARKERS = (
     "Похожие товары",
     "Недавно смотрели",
 )
-_USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
-)
-_HIDE_WEBDRIVER = (
-    "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
-)
 _POLL_INTERVAL = 1.0
 # If the SPA did not open the product card within this window, treat the
 # product as missing instead of burning the full price timeout.
 _NOT_FOUND_AFTER = 15.0
 
 
-def _to_price(raw: str) -> Decimal | None:
-    digits = re.sub(r"[\s\xa0]", "", raw)
-    try:
-        price = Decimal(digits)
-    except InvalidOperation:
-        return None
-    return price if price > 0 else None
-
-
 def parse_title_price(title: str) -> Decimal | None:
     match = _TITLE_PRICE.search(title)
     if match is None:
         return None
-    return _to_price(match.group(1))
+    return parse_price(match.group(1))
 
 
 def parse_body_price(text: str) -> Decimal | None:
@@ -75,7 +62,7 @@ def parse_body_price(text: str) -> Decimal | None:
         if idx >= 0:
             text = text[:idx]
     for match in _BODY_PRICE.finditer(text):
-        price = _to_price(match.group(1))
+        price = parse_price(match.group(1))
         if price is not None:
             return price
     return None
@@ -114,35 +101,18 @@ class WbPriceSource:
 
     async def _fetch_once(self, nm: int) -> Decimal | None:
         cfg = get_settings()
-        try:
-            from playwright.async_api import async_playwright
-        except ImportError:
-            logger.warning("playwright is not installed; price unavailable")
-            return None
         timeout_ms = int(cfg.PRICE_TIMEOUT * 1000)
         try:
-            async with async_playwright() as playwright:
-                launch_kwargs: dict[str, Any] = {"headless": cfg.PRICE_HEADLESS}
-                if cfg.PROXY_URL:
-                    launch_kwargs["proxy"] = {"server": cfg.PROXY_URL}
-                browser = await playwright.chromium.launch(**launch_kwargs)
-                try:
-                    context = await browser.new_context(
-                        locale="ru-RU",
-                        timezone_id="Europe/Moscow",
-                        user_agent=_USER_AGENT,
-                        viewport={"width": 1440, "height": 1000},
-                    )
-                    await context.add_init_script(_HIDE_WEBDRIVER)
-                    page = await context.new_page()
-                    await page.goto(
-                        f"https://www.wildberries.ru/catalog/{nm}/detail.aspx",
-                        wait_until="domcontentloaded",
-                        timeout=timeout_ms,
-                    )
-                    return await self._wait_price(page, nm, timeout_ms)
-                finally:
-                    await browser.close()
+            async with wb_browser_session() as page:
+                await page.goto(
+                    wb_product_url(nm),
+                    wait_until="domcontentloaded",
+                    timeout=timeout_ms,
+                )
+                return await self._wait_price(page, nm, timeout_ms)
+        except BrowserUnavailable as exc:
+            logger.warning("%s", exc)
+            return None
         except Exception as exc:
             logger.warning("price fetch failed for nm=%s: %s", nm, type(exc).__name__)
             return None

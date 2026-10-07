@@ -2,6 +2,20 @@ import re
 
 NM_FROM_URL = re.compile(r"/catalog/(\d+)/")
 
+WB_ORIGIN = "https://www.wildberries.ru"
+OZON_ORIGIN = "https://www.ozon.ru"
+OZON_PAGE_API = OZON_ORIGIN + "/api/composer-api.bx/page/json/v2?url="
+OZON_REVIEWS_API = OZON_ORIGIN + "/api/entrypoint-api.bx/page/json/v2?url="
+
+
+def wb_product_url(nm: int) -> str:
+    return f"{WB_ORIGIN}/catalog/{nm}/detail.aspx"
+
+
+def ozon_product_url(sku: int) -> str:
+    return f"{OZON_ORIGIN}/product/{sku}/"
+
+
 # Ozon product slugs always end with the numeric article: both
 # /product/<slug>-<id>/ and the short /product/<id>/ match.
 OZON_PRODUCT_ID = re.compile(r"^/product/(?:[^/?#]*-)?(\d+)/?$")
