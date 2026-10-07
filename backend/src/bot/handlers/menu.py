@@ -3,17 +3,16 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
 from src.bot.keyboards.inline import back_menu, main_menu, submenu
-from src.bot.texts import GREETING, MENU_TITLES, STUB_TEXT
+from src.bot.texts import (
+    GREETING,
+    MENU_TITLES,
+    STUB_TEXT,
+    STUB_TITLES,
+    UNKNOWN_SECTION,
+)
+from src.bot.utils import safe_edit
 
 router = Router(name="menu")
-
-STUB_TITLES = {
-    "unit_calc": "Быстрый расчёт",
-    "weekly_report": "Отчёт WB/Ozon",
-    "review_audit": "Аудит отзывов",
-    "card_risks": "Риски карточки товара",
-    "legal_audit": "Комплексный аудит бизнеса",
-}
 
 
 async def _show_menu(callback: CallbackQuery, state: FSMContext, name: str) -> None:
@@ -26,9 +25,9 @@ async def _show_menu(callback: CallbackQuery, state: FSMContext, name: str) -> N
     elif name in MENU_TITLES:
         text, keyboard = MENU_TITLES[name], submenu(name)
     else:
-        await callback.answer("Неизвестный раздел", show_alert=True)
+        await callback.answer(UNKNOWN_SECTION, show_alert=True)
         return
-    await callback.message.edit_text(text, reply_markup=keyboard)
+    await safe_edit(callback.message, text, keyboard)
     await callback.answer()
 
 
@@ -45,7 +44,5 @@ async def menu_stub(callback: CallbackQuery) -> None:
     if title is None or not isinstance(callback.message, Message):
         await callback.answer()
         return
-    await callback.message.edit_text(
-        STUB_TEXT.format(title=title), reply_markup=back_menu()
-    )
+    await safe_edit(callback.message, STUB_TEXT.format(title=title), back_menu())
     await callback.answer()

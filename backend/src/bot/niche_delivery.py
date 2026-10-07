@@ -8,7 +8,7 @@ short status note.
 import re
 from typing import Any
 
-from src.bot.renderers import REPORT_LIMIT, render_niche_report
+from src.bot.renderers import NICHE_FILE_CAPTION, REPORT_LIMIT, render_niche_report
 from src.bot.texts import DEEP_REPORT_READY
 from src.core.results import ResultSink
 from src.modules.analytics import NicheReport
@@ -49,7 +49,7 @@ async def deliver_niche_report(
         )
     await sink.deliver_file(
         chat_id,
-        f"📄 Отчёт по нише «{report.query}»",
+        NICHE_FILE_CAPTION.format(query=report.query),
         full.encode("utf-8"),
         niche_report_filename(report),
         reply_markup=reply_markup,

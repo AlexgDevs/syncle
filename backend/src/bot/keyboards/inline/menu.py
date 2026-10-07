@@ -2,6 +2,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from src.bot.texts import BACK_TO_MENU, BTN_SKIP
+from src.modules.analytics.enums import MARKETPLACE_TITLES
 
 MAIN_ROWS = [
     [("📊 Аналитика ниши", "menu:niche")],
@@ -58,11 +59,14 @@ def express_setup() -> InlineKeyboardMarkup:
 def deep_scan_mp() -> InlineKeyboardMarkup:
     return _build(
         [
-            [("Wildberries", "scene:deep:mp:wb"), ("Ozon", "scene:deep:mp:ozon")],
+            [
+                (MARKETPLACE_TITLES["wb"], "scene:deep_scan:mp:wb"),
+                (MARKETPLACE_TITLES["ozon"], "scene:deep_scan:mp:ozon"),
+            ],
             [(BACK_TO_MENU, "menu:main")],
         ]
     )
 
 
 def deep_scan_own_setup() -> InlineKeyboardMarkup:
-    return _build([[(BTN_SKIP, "scene:deep:skip")], [(BACK_TO_MENU, "menu:main")]])
+    return _build([[(BTN_SKIP, "scene:deep_scan:skip")], [(BACK_TO_MENU, "menu:main")]])

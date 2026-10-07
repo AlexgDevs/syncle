@@ -15,6 +15,7 @@ from aiogram.types import CallbackQuery, ErrorEvent, Message, Update
 from src.bot.texts import (
     CARD_NOT_FOUND,
     GENERIC_ERROR,
+    NICHE_SEARCH_FAILED,
     OZON_BROWSER_UNAVAILABLE,
     PARSE_FAILED,
     UNSUPPORTED_MARKETPLACE,
@@ -23,6 +24,7 @@ from src.core.errors import SyncleError
 from src.modules.analytics.errors import (
     CardNotFoundError,
     CardParseError,
+    NicheSearchError,
     OzonBrowserError,
     UnsupportedMarketplaceError,
 )
@@ -39,6 +41,8 @@ def describe_error(exc: Exception) -> str:
         return CARD_NOT_FOUND
     if isinstance(exc, CardParseError):
         return PARSE_FAILED
+    if isinstance(exc, NicheSearchError):
+        return NICHE_SEARCH_FAILED
     return GENERIC_ERROR
 
 

@@ -1,11 +1,14 @@
 from aiogram import F, Router
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, Message
 
-from src.bot.delivery import AiogramResultSink
-from src.bot.polling import get_job_runner
+from src.bot.handlers.common import (
+    launch_job_or_inline,
+    register_media_hint,
+    require_state,
+    result_sink,
+)
 from src.bot.keyboards.inline import back_menu, express_setup
 from src.bot.renderers import render_analysis_report
 from src.bot.texts import (
@@ -13,11 +16,8 @@ from src.bot.texts import (
     EXPRESS_OWN_PROMPT,
     EXPRESS_RIVAL_PROMPT,
     INVALID_INPUT,
-    MEDIA_HINT,
 )
-from src.bot.utils import is_valid_card_input
-from src.core.results import ResultSink
-from src.core.settings import get_settings
+from src.bot.utils import is_valid_card_input, safe_edit
 from src.modules.analytics import get_analytics_service
 from src.modules.analytics.jobs import ANALYSIS_JOB_TYPE
 
@@ -29,37 +29,26 @@ class ExpressAnalysis(StatesGroup):
     waiting_rival = State()
 
 
-async def _edit_or_pass(
-    message: Message, text: str, reply_markup: InlineKeyboardMarkup | None
-) -> None:
-    try:
-        await message.edit_text(text, reply_markup=reply_markup)
-    except TelegramBadRequest as exc:
-        if "message is not modified" not in str(exc):
-            raise
-
-
 @router.callback_query(F.data == "scene:express")
 async def start_analysis(callback: CallbackQuery, state: FSMContext) -> None:
     if not isinstance(callback.message, Message):
         await callback.answer()
         return
     await state.set_state(ExpressAnalysis.waiting_own)
-    await _edit_or_pass(callback.message, EXPRESS_OWN_PROMPT, express_setup())
+    await safe_edit(callback.message, EXPRESS_OWN_PROMPT, express_setup())
     await callback.answer()
 
 
 @router.callback_query(F.data == "scene:express:skip")
 async def skip_own(callback: CallbackQuery, state: FSMContext) -> None:
-    if (await state.get_state()) != ExpressAnalysis.waiting_own.state:
-        await callback.answer()
+    if not await require_state(state, ExpressAnalysis.waiting_own, callback):
         return
     await state.update_data(own=None)
     await state.set_state(ExpressAnalysis.waiting_rival)
     if not isinstance(callback.message, Message):
         await callback.answer()
         return
-    await _edit_or_pass(callback.message, EXPRESS_RIVAL_PROMPT, back_menu())
+    await safe_edit(callback.message, EXPRESS_RIVAL_PROMPT, back_menu())
     await callback.answer()
 
 
@@ -81,25 +70,22 @@ async def handle_rival(message: Message, state: FSMContext) -> None:
         await message.answer(INVALID_INPUT)
         return
     own = (await state.get_data()).get("own")
+    own_source = own if isinstance(own, str) else None
     status = await message.answer(ANALYSIS_LOADING)
-    if get_settings().JOBS_MODE == "taskiq":
-        await get_job_runner().submit(
-            ANALYSIS_JOB_TYPE,
-            {
-                "own": own,
-                "rival": value,
-                "chat_id": message.chat.id,
-                "status_message_id": status.message_id,
-            },
-        )
-        await state.clear()
+    if await launch_job_or_inline(
+        state,
+        ANALYSIS_JOB_TYPE,
+        {
+            "own": own_source,
+            "rival": value,
+            "chat_id": message.chat.id,
+            "status_message_id": status.message_id,
+        },
+    ):
         return
-    report = await get_analytics_service().compare_cards(own, value)
+    report = await get_analytics_service().compare_cards(own_source, value)
     await state.clear()
-    if message.bot is None:
-        raise RuntimeError("telegram bot instance is not available")
-    sink: ResultSink = AiogramResultSink(message.bot)
-    await sink.deliver(
+    await result_sink(message).deliver(
         message.chat.id,
         render_analysis_report(report),
         reply_markup=back_menu(),
@@ -107,11 +93,4 @@ async def handle_rival(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.message(ExpressAnalysis.waiting_own)
-async def handle_own_media(message: Message) -> None:
-    await message.answer(MEDIA_HINT)
-
-
-@router.message(ExpressAnalysis.waiting_rival)
-async def handle_rival_media(message: Message) -> None:
-    await message.answer(MEDIA_HINT)
+register_media_hint(router, ExpressAnalysis.waiting_own, ExpressAnalysis.waiting_rival)
