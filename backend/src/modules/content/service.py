@@ -6,15 +6,14 @@ marketplace clamp; one repair retry with the validation errors, then
 are domain exceptions by contract, ADR-002).
 """
 
-import json
 import logging
 from collections.abc import Awaitable, Callable
 from functools import lru_cache
-from typing import Any
 
 from pydantic import ValidationError
 
 from src.core.llm import LLMProvider, get_llm_provider
+from src.core.llm.json_output import extract_json_object
 from src.modules.content.errors import SeoGenerationError
 from src.modules.content.prompts import (
     SEO_MAX_TOKENS,
@@ -50,19 +49,6 @@ def _clamp(text: SeoText, limits: SeoLimits) -> SeoText:
         bullets=bullets[: limits.bullets],
         keywords=keywords[: limits.keywords],
     )
-
-
-def _extract_json(raw: str) -> dict[str, Any] | None:
-    """Pull the JSON object out of the completion (tolerates fences/prose)."""
-    start = raw.find("{")
-    end = raw.rfind("}")
-    if start == -1 or end <= start:
-        return None
-    try:
-        data = json.loads(raw[start : end + 1])
-    except json.JSONDecodeError:
-        return None
-    return data if isinstance(data, dict) else None
 
 
 def _validation_errors(exc: ValidationError) -> list[str]:
@@ -119,7 +105,7 @@ class SeoService:
         self, raw: str, request: SeoRequest
     ) -> tuple[SeoText | None, list[str]]:
         """Parse and validate one completion; returns (text, errors)."""
-        data = _extract_json(raw)
+        data = extract_json_object(raw)
         if data is None:
             return None, ["response is not a JSON object"]
         try:

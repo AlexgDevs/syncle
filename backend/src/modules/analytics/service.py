@@ -12,7 +12,7 @@ from src.modules.analytics.enums import Marketplace
 from src.modules.analytics.errors import CardParseError, UnsupportedMarketplaceError
 from src.modules.analytics.niche import build_niche_stats, parse_insights
 from src.modules.analytics.parsers import (
-    CardParser,
+    CardWithReviews,
     NicheSearcher,
     OzonParser,
     OzonSearcher,
@@ -36,6 +36,7 @@ from src.modules.analytics.schemas import (
     CompetitorCard,
     NicheReport,
     NicheStats,
+    Review,
 )
 from src.modules.analytics.recommendations import positioning_recommendations
 from src.modules.analytics.seo_diff import missed_seo_keys
@@ -71,9 +72,9 @@ def _optimal_price(competitor_price: Decimal | None) -> Decimal | None:
 class ExpressAnalysisService:
     def __init__(
         self,
-        parser: CardParser,
+        parser: CardWithReviews,
         llm: LLMProvider | None = None,
-        ozon_parser: CardParser | None = None,
+        ozon_parser: CardWithReviews | None = None,
         wb_searcher: NicheSearcher | None = None,
         ozon_searcher: NicheSearcher | None = None,
     ) -> None:
@@ -127,6 +128,24 @@ class ExpressAnalysisService:
         if marketplace is not Marketplace.WB:
             raise UnsupportedMarketplaceError(str(marketplace))
         return await self.parser.parse(source)
+
+    async def fetch_reviews(self, source: str) -> list[Review]:
+        """Reviews of one source via the matching marketplace parser (#32).
+
+        The cap (``REVIEWS_CAP``) is applied inside the parsers.
+        """
+        marketplace = _detect_marketplace(source)
+        if marketplace is None:
+            raise CardParseError(
+                f"Invalid or unsupported product source: {source.strip()!r}"
+            )
+        if marketplace is Marketplace.OZON:
+            if self._ozon_parser is None:
+                self._ozon_parser = OzonParser()
+            return await self._ozon_parser.get_reviews(source)
+        if marketplace is not Marketplace.WB:
+            raise UnsupportedMarketplaceError(str(marketplace))
+        return await self.parser.get_reviews(source)
 
     async def scan_niche(
         self,

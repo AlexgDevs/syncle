@@ -8,6 +8,7 @@ from src.modules.analytics import (
 )
 from src.modules.analytics.enums import MARKETPLACE_TITLES
 from src.modules.content import SeoText
+from src.modules.reviews import ReviewReport
 
 NO_DATA = "—"
 PRICE_UNAVAILABLE = "недоступна"
@@ -338,3 +339,27 @@ def render_seo_report(text: SeoText) -> str:
         ),
         REPORT_LIMIT,
     )
+
+
+REVIEWS_REPORT = "🔎 Аудит отзывов · тон: {tone}\n{groups}"
+
+REVIEWS_GROUP = "\n\n{tag}:\n{points}"
+
+TONE_TITLES = {
+    "neutral": "нейтральный",
+    "soft": "мягкий",
+    "harsh": "жёсткий",
+}
+
+
+def render_reviews_report(report: ReviewReport) -> str:
+    """Render findings grouped by tag for delivery (issue #31)."""
+    tone = TONE_TITLES.get(str(report.tone), str(report.tone))
+    groups = "".join(
+        REVIEWS_GROUP.format(
+            tag=finding.tag,
+            points="\n".join(f"• {point}" for point in finding.points),
+        )
+        for finding in report.findings
+    )
+    return _clamp(REVIEWS_REPORT.format(tone=tone, groups=groups), REPORT_LIMIT)

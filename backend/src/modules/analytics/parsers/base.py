@@ -21,6 +21,10 @@ class ReviewsSource(Protocol):
     async def get_reviews(self, source: str) -> list[Review]: ...
 
 
+class CardWithReviews(CardParser, ReviewsSource, Protocol):
+    """Card parser that can also extract reviews (issue #32)."""
+
+
 class CardPriceSource(Protocol):
     """Resolves the current price of a product by marketplace article.
 

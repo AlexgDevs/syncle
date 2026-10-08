@@ -21,6 +21,8 @@ from src.bot.texts import (
     NICHE_SEARCH_FAILED,
     OZON_BROWSER_UNAVAILABLE,
     PARSE_FAILED,
+    REVIEWS_FAILED,
+    REVIEWS_FETCH_FAILED,
     SEO_FAILED,
     UNSUPPORTED_MARKETPLACE,
 )
@@ -34,6 +36,7 @@ from src.modules.analytics.errors import (
     UnsupportedMarketplaceError,
 )
 from src.modules.content.errors import SeoGenerationError
+from src.modules.reviews import ReviewAnalysisError, ReviewsFetchError
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +54,10 @@ def describe_error(exc: Exception) -> str:
         return NICHE_SEARCH_FAILED
     if isinstance(exc, SeoGenerationError):
         return SEO_FAILED
+    if isinstance(exc, ReviewsFetchError):
+        return REVIEWS_FETCH_FAILED
+    if isinstance(exc, ReviewAnalysisError):
+        return REVIEWS_FAILED
     if isinstance(exc, LLMTimeoutError):
         return LLM_TIMEOUT_TEXT
     if isinstance(exc, LLMRateLimitError):

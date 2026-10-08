@@ -13,9 +13,17 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
 
 from src.bot.delivery import AiogramResultSink
-from src.bot.keyboards.inline import back_menu, seo_result_keyboard
+from src.bot.keyboards.inline import (
+    back_menu,
+    reviews_result_keyboard,
+    seo_result_keyboard,
+)
 from src.bot.niche_delivery import deliver_niche_report
-from src.bot.renderers import render_analysis_report, render_seo_report
+from src.bot.renderers import (
+    render_analysis_report,
+    render_reviews_report,
+    render_seo_report,
+)
 from src.bot.texts import (
     ANALYSIS_LOADING,
     JOB_CANCELLED,
@@ -31,6 +39,8 @@ from src.modules.analytics.jobs import NICHE_SCAN_JOB_TYPE
 from src.modules.analytics.schemas import AnalysisReport, NicheReport
 from src.modules.content import SeoText
 from src.modules.content.jobs import SEO_JOB_TYPE
+from src.modules.reviews import ReviewReport
+from src.modules.reviews.jobs import REVIEWS_JOB_TYPE
 
 logger = logging.getLogger(__name__)
 
@@ -140,6 +150,14 @@ class JobPoller:
             seo = SeoText.model_validate_json(info.result)
             await self._deliver_terminal(
                 info, render_seo_report(seo), reply_markup=seo_result_keyboard(seo)
+            )
+            return
+        if info.job_type == REVIEWS_JOB_TYPE:
+            reviews_report = ReviewReport.model_validate_json(info.result)
+            await self._deliver_terminal(
+                info,
+                render_reviews_report(reviews_report),
+                reply_markup=reviews_result_keyboard(reviews_report),
             )
             return
         analysis = AnalysisReport.model_validate_json(info.result)

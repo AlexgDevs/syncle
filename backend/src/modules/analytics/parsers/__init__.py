@@ -1,6 +1,7 @@
 from src.modules.analytics.parsers.base import (
     CardParser,
     CardPriceSource,
+    CardWithReviews,
     NicheSearcher,
     ReviewsSource,
 )
@@ -13,6 +14,7 @@ from src.modules.analytics.parsers.wb_search import WbSearcher
 __all__ = [
     "CardParser",
     "CardPriceSource",
+    "CardWithReviews",
     "NicheSearcher",
     "OzonParser",
     "OzonSearcher",
