@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://api.proxyapi.ru/openai/v1"
     LLM_MODEL: str = ""
     LLM_TIMEOUT: float = 30.0
+    # Vision-capable model for photo input (#27); "" falls back to LLM_MODEL,
+    # and when both are empty vision is unavailable (bot degrades to text-only)
+    LLM_VISION_MODEL: str = ""
 
     # Shared outbound HTTP (src.core.http): retry with backoff on timeouts/5xx
     HTTP_TIMEOUT: float = 10.0

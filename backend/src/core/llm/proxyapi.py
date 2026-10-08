@@ -1,3 +1,4 @@
+import base64
 import logging
 from functools import lru_cache
 
@@ -7,7 +8,10 @@ from openai import (
     AsyncOpenAI,
     RateLimitError,
 )
-from openai.types.chat import ChatCompletionMessageParam
+from openai.types.chat import (
+    ChatCompletionContentPartParam,
+    ChatCompletionMessageParam,
+)
 
 from src.core.http import get_llm_client
 from src.core.llm.errors import (
@@ -17,9 +21,17 @@ from src.core.llm.errors import (
     LLMUnavailableError,
 )
 from src.core.llm.provider import LLMProvider
-from src.core.settings import get_settings
+from src.core.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
+
+
+def _image_part(image: bytes) -> ChatCompletionContentPartParam:
+    encoded = base64.b64encode(image).decode("ascii")
+    return {
+        "type": "image_url",
+        "image_url": {"url": f"data:image/jpeg;base64,{encoded}"},
+    }
 
 
 class ProxyApiProvider:
@@ -36,11 +48,19 @@ class ProxyApiProvider:
         system: str | None = None,
         temperature: float = 0.7,
         max_tokens: int | None = None,
+        images: list[bytes] | None = None,
     ) -> str:
         messages: list[ChatCompletionMessageParam] = []
         if system is not None:
             messages.append({"role": "system", "content": system})
-        messages.append({"role": "user", "content": prompt})
+        if images:
+            parts: list[ChatCompletionContentPartParam] = [
+                {"type": "text", "text": prompt}
+            ]
+            parts.extend(_image_part(image) for image in images)
+            messages.append({"role": "user", "content": parts})
+        else:
+            messages.append({"role": "user", "content": prompt})
         try:
             response = await self._client.chat.completions.create(
                 model=self._model,
@@ -82,6 +102,16 @@ class ProxyApiProvider:
         )
 
 
+def _build_client(cfg: Settings) -> AsyncOpenAI:
+    return AsyncOpenAI(
+        api_key=cfg.LLM_API_KEY,
+        base_url=cfg.LLM_BASE_URL,
+        timeout=cfg.LLM_TIMEOUT,
+        max_retries=2,
+        http_client=get_llm_client(),
+    )
+
+
 @lru_cache
 def get_llm_provider() -> LLMProvider | None:
     """Return the shared provider, or None when LLM is not configured.
@@ -92,11 +122,18 @@ def get_llm_provider() -> LLMProvider | None:
     cfg = get_settings()
     if not cfg.LLM_API_KEY or not cfg.LLM_MODEL:
         return None
-    client = AsyncOpenAI(
-        api_key=cfg.LLM_API_KEY,
-        base_url=cfg.LLM_BASE_URL,
-        timeout=cfg.LLM_TIMEOUT,
-        max_retries=2,
-        http_client=get_llm_client(),
-    )
-    return ProxyApiProvider(client=client, model=cfg.LLM_MODEL)
+    return ProxyApiProvider(client=_build_client(cfg), model=cfg.LLM_MODEL)
+
+
+@lru_cache
+def get_vision_provider() -> LLMProvider | None:
+    """Return the vision provider for photo input (#27), or None.
+
+    Uses LLM_VISION_MODEL, falling back to LLM_MODEL; None when neither
+    is configured (the bot then degrades to text-only SEO generation).
+    """
+    cfg = get_settings()
+    model = cfg.LLM_VISION_MODEL or cfg.LLM_MODEL
+    if not cfg.LLM_API_KEY or not model:
+        return None
+    return ProxyApiProvider(client=_build_client(cfg), model=model)

@@ -4,7 +4,7 @@ from src.core.llm.errors import (
     LLMTimeoutError,
     LLMUnavailableError,
 )
-from src.core.llm.proxyapi import get_llm_provider
+from src.core.llm.proxyapi import get_llm_provider, get_vision_provider
 from src.core.llm.provider import LLMProvider
 
 __all__ = [
@@ -14,4 +14,5 @@ __all__ = [
     "LLMTimeoutError",
     "LLMUnavailableError",
     "get_llm_provider",
+    "get_vision_provider",
 ]
