@@ -15,12 +15,17 @@ from aiogram.types import CallbackQuery, ErrorEvent, Message, Update
 from src.bot.texts import (
     CARD_NOT_FOUND,
     GENERIC_ERROR,
+    LLM_RATE_LIMIT_TEXT,
+    LLM_TIMEOUT_TEXT,
+    LLM_UNAVAILABLE_TEXT,
     NICHE_SEARCH_FAILED,
     OZON_BROWSER_UNAVAILABLE,
     PARSE_FAILED,
+    SEO_FAILED,
     UNSUPPORTED_MARKETPLACE,
 )
 from src.core.errors import SyncleError
+from src.core.llm import LLMRateLimitError, LLMTimeoutError, LLMUnavailableError
 from src.modules.analytics.errors import (
     CardNotFoundError,
     CardParseError,
@@ -28,6 +33,7 @@ from src.modules.analytics.errors import (
     OzonBrowserError,
     UnsupportedMarketplaceError,
 )
+from src.modules.content.errors import SeoGenerationError
 
 logger = logging.getLogger(__name__)
 
@@ -43,6 +49,14 @@ def describe_error(exc: Exception) -> str:
         return PARSE_FAILED
     if isinstance(exc, NicheSearchError):
         return NICHE_SEARCH_FAILED
+    if isinstance(exc, SeoGenerationError):
+        return SEO_FAILED
+    if isinstance(exc, LLMTimeoutError):
+        return LLM_TIMEOUT_TEXT
+    if isinstance(exc, LLMRateLimitError):
+        return LLM_RATE_LIMIT_TEXT
+    if isinstance(exc, LLMUnavailableError):
+        return LLM_UNAVAILABLE_TEXT
     return GENERIC_ERROR
 
 

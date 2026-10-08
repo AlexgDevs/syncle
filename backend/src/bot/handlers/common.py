@@ -25,15 +25,15 @@ async def require_state(
     return True
 
 
-def register_media_hint(router: Router, *states: State) -> None:
-    """Reply MEDIA_HINT to non-text messages in the given states.
+def register_media_hint(router: Router, *states: State, hint: str = MEDIA_HINT) -> None:
+    """Reply ``hint`` to non-text messages in the given states.
 
     Register after the state's text handlers so they win the match.
     """
 
     @router.message(StateFilter(*states))
     async def _media_hint(message: Message) -> None:
-        await message.answer(MEDIA_HINT)
+        await message.answer(hint)
 
 
 async def launch_job_or_inline(
