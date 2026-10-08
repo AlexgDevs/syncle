@@ -3,13 +3,21 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from src.bot.texts import (
     BACK_TO_MENU,
+    BTN_ANALYZE,
     BTN_COPY_DESCRIPTION,
     BTN_COPY_TITLE,
+    BTN_PAGE_NEXT,
+    BTN_PAGE_PREV,
     BTN_SKIP,
+    BTN_TONE_HARSH,
+    BTN_TONE_NEUTRAL,
+    BTN_TONE_SOFT,
     SEO_MENU_LABEL,
 )
 from src.modules.analytics.enums import MARKETPLACE_TITLES
+from src.modules.analytics.schemas import Review
 from src.modules.content import SeoText
+from src.modules.reviews import ReviewReport
 
 MAIN_ROWS = [
     [("📊 Аналитика ниши", "menu:niche")],
@@ -29,7 +37,7 @@ MENU_ROWS = {
         [("📁 Отчёт WB/Ozon (Excel/CSV)", "stub:weekly_report")],
     ],
     "reputation": [
-        [("🏷 Аудит и авто-теги отзывов", "stub:review_audit")],
+        [("🏷 Аудит и авто-теги отзывов", "scene:reviews")],
     ],
     "legal": [
         [("🛡 Риски карточки товара", "stub:card_risks")],
@@ -120,5 +128,99 @@ def seo_result_keyboard(text: SeoText) -> InlineKeyboardMarkup:
     ]
     if copy_buttons:
         builder.row(*copy_buttons)
+    builder.row(InlineKeyboardButton(text=BACK_TO_MENU, callback_data="menu:main"))
+    return builder.as_markup()
+
+
+def reviews_rival_setup() -> InlineKeyboardMarkup:
+    return _build([[(BTN_SKIP, "scene:reviews:skip")], [(BACK_TO_MENU, "menu:main")]])
+
+
+def reviews_tone() -> InlineKeyboardMarkup:
+    return _build(
+        [
+            [
+                (BTN_TONE_NEUTRAL, "scene:reviews:tone:neutral"),
+                (BTN_TONE_SOFT, "scene:reviews:tone:soft"),
+                (BTN_TONE_HARSH, "scene:reviews:tone:harsh"),
+            ],
+            [(BACK_TO_MENU, "menu:main")],
+        ]
+    )
+
+
+SELECTION_PAGE_SIZE = 10  # keeps serialized markup well under Telegram's ~10 KB cap
+
+
+def reviews_selection(
+    entries: list[tuple[str, Review]], selected: set[str], page: int = 0
+) -> InlineKeyboardMarkup:
+    """Paginated toggle list: checkbox per review, analyze, menu (#31).
+
+    Callback data is ``scene:reviews:toggle:<role>:<id>``; role prefixing
+    keeps keys unique when own and rival review ids collide. Telegram
+    rejects keyboards over ~10 KB serialized / 100 buttons, so only one
+    page of reviews is rendered at a time.
+    """
+    pages = max(1, -(-len(entries) // SELECTION_PAGE_SIZE))
+    page = min(max(page, 0), pages - 1)
+    builder = InlineKeyboardBuilder()
+    for key, review in entries[page * SELECTION_PAGE_SIZE :][:SELECTION_PAGE_SIZE]:
+        source = review.text or review.pros or review.cons or "без текста"
+        one_line = " ".join(source.split())
+        excerpt = one_line[:45] + ("…" if len(one_line) > 45 else "")
+        marker = "☑" if key in selected else "☐"
+        builder.row(
+            InlineKeyboardButton(
+                text=f"{marker} {excerpt}",
+                callback_data=f"scene:reviews:toggle:{key}",
+            )
+        )
+    if pages > 1:
+        nav: list[InlineKeyboardButton] = []
+        if page > 0:
+            nav.append(
+                InlineKeyboardButton(
+                    text=BTN_PAGE_PREV,
+                    callback_data=f"scene:reviews:page:{page - 1}",
+                )
+            )
+        nav.append(
+            InlineKeyboardButton(
+                text=f"{page + 1}/{pages}", callback_data="scene:reviews:noop"
+            )
+        )
+        if page < pages - 1:
+            nav.append(
+                InlineKeyboardButton(
+                    text=BTN_PAGE_NEXT,
+                    callback_data=f"scene:reviews:page:{page + 1}",
+                )
+            )
+        builder.row(*nav)
+    builder.row(
+        InlineKeyboardButton(
+            text=BTN_ANALYZE.format(count=len(selected)),
+            callback_data="scene:reviews:analyze",
+        )
+    )
+    builder.row(InlineKeyboardButton(text=BACK_TO_MENU, callback_data="menu:main"))
+    return builder.as_markup()
+
+
+def reviews_result_keyboard(report: ReviewReport) -> InlineKeyboardMarkup:
+    """Copy buttons, one per finding group (#31).
+
+    Service clamps guarantee each group's points fit Telegram's 256-char
+    copy limit (3 x 80 + separators <= 242).
+    """
+    builder = InlineKeyboardBuilder()
+    for finding in report.findings:
+        builder.row(
+            InlineKeyboardButton(
+                text=f"📋 {finding.tag}",
+                copy_text=CopyTextButton(text="\n".join(finding.points)),
+            )
+        )
     builder.row(InlineKeyboardButton(text=BACK_TO_MENU, callback_data="menu:main"))
     return builder.as_markup()
