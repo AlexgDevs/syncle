@@ -10,11 +10,12 @@ import logging
 from functools import lru_cache
 
 from aiogram import Bot
+from aiogram.types import InlineKeyboardMarkup
 
 from src.bot.delivery import AiogramResultSink
-from src.bot.keyboards.inline import back_menu
+from src.bot.keyboards.inline import back_menu, seo_result_keyboard
 from src.bot.niche_delivery import deliver_niche_report
-from src.bot.renderers import render_analysis_report
+from src.bot.renderers import render_analysis_report, render_seo_report
 from src.bot.texts import (
     ANALYSIS_LOADING,
     JOB_CANCELLED,
@@ -28,6 +29,8 @@ from src.core.results import ResultSink
 from src.core.settings import get_settings
 from src.modules.analytics.jobs import NICHE_SCAN_JOB_TYPE
 from src.modules.analytics.schemas import AnalysisReport, NicheReport
+from src.modules.content import SeoText
+from src.modules.content.jobs import SEO_JOB_TYPE
 
 logger = logging.getLogger(__name__)
 
@@ -133,10 +136,21 @@ class JobPoller:
                 reply_markup=back_menu(),
             )
             return
+        if info.job_type == SEO_JOB_TYPE:
+            seo = SeoText.model_validate_json(info.result)
+            await self._deliver_terminal(
+                info, render_seo_report(seo), reply_markup=seo_result_keyboard(seo)
+            )
+            return
         analysis = AnalysisReport.model_validate_json(info.result)
         await self._deliver_terminal(info, render_analysis_report(analysis))
 
-    async def _deliver_terminal(self, info: JobInfo, text: str) -> None:
+    async def _deliver_terminal(
+        self,
+        info: JobInfo,
+        text: str,
+        reply_markup: InlineKeyboardMarkup | None = None,
+    ) -> None:
         chat_id = _chat_id(info)
         if chat_id is None:
             logger.warning("job %s has no valid chat_id in payload", info.id)
@@ -144,7 +158,7 @@ class JobPoller:
         await self._sink.deliver(
             chat_id,
             text,
-            reply_markup=back_menu(),
+            reply_markup=reply_markup or back_menu(),
             edit_message_id=_status_message_id(info),
         )
 

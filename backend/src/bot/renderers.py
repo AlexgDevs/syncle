@@ -7,6 +7,7 @@ from src.modules.analytics import (
     PositioningInsight,
 )
 from src.modules.analytics.enums import MARKETPLACE_TITLES
+from src.modules.content import SeoText
 
 NO_DATA = "—"
 PRICE_UNAVAILABLE = "недоступна"
@@ -304,3 +305,36 @@ def render_niche_report(report: NicheReport, limit: int | None = REPORT_LIMIT) -
     if limit is None:
         return text
     return _clamp(text, limit)
+
+
+SEO_REPORT = (
+    "✨ SEO-текст готов\n\n"
+    "🏷 Название:\n{title}\n\n"
+    "📝 Описание:\n{description}"
+    "{bullets}{keywords}"
+)
+
+SEO_BULLETS = "\n\n✅ Преимущества:\n{items}"
+
+SEO_KEYWORDS = "\n\n🔑 Ключевые слова: {items}"
+
+
+def render_seo_report(text: SeoText) -> str:
+    """Render the generated SEO block for delivery (issue #26)."""
+    bullets = (
+        SEO_BULLETS.format(items="\n".join(f"• {b}" for b in text.bullets))
+        if text.bullets
+        else ""
+    )
+    keywords = (
+        SEO_KEYWORDS.format(items=" · ".join(text.keywords)) if text.keywords else ""
+    )
+    return _clamp(
+        SEO_REPORT.format(
+            title=text.title,
+            description=text.description,
+            bullets=bullets,
+            keywords=keywords,
+        ),
+        REPORT_LIMIT,
+    )

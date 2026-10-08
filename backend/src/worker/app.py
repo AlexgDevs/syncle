@@ -15,8 +15,10 @@ from src.core.jobs.taskiq_runner import get_broker
 from src.core.redis import close_redis, init_redis
 from src.core.redis.client import get_redis
 from src.modules.analytics.jobs import register_analytics_jobs
+from src.modules.content.jobs import register_content_jobs
 
 register_analytics_jobs()
+register_content_jobs()
 
 broker = get_broker()
 
