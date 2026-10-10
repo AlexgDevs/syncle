@@ -31,6 +31,26 @@ class Settings(BaseSettings):
     # and when both are empty vision is unavailable (bot degrades to text-only)
     LLM_VISION_MODEL: str = ""
 
+    # Image generation model (infographics #62); no fallback: text models
+    # cannot draw, so "" keeps image generation unavailable
+    LLM_IMAGE_MODEL: str = ""
+
+    # Optional separate base URL for image calls. Non-OpenAI vendors need
+    # the unified API base (https://api.proxyapi.ru/v1) with vendor-prefixed
+    # ids; "" reuses LLM_BASE_URL
+    LLM_IMAGE_BASE_URL: str = ""
+
+    # Optional quality knob for models that accept it (gpt-image family:
+    # low/medium/high); "" omits the parameter entirely
+    LLM_IMAGE_QUALITY: str = ""
+
+    # AITunnel image gateway (infographics #62): OpenAI-compatible reseller
+    # with RUB billing; when AITUNNEL_API_KEY is set it owns image generation
+    # (Gemini image models), and LLM_IMAGE_MODEL stays as a manual fallback
+    AITUNNEL_API_KEY: str = ""
+    AITUNNEL_IMAGE_MODEL: str = "gemini-3.1-flash-lite-image"
+    AITUNNEL_IMAGE_BASE_URL: str = "https://api.aitunnel.ru/v1"
+
     # Shared outbound HTTP (src.core.http): retry with backoff on timeouts/5xx
     HTTP_TIMEOUT: float = 10.0
     HTTP_MAX_RETRIES: int = 2
