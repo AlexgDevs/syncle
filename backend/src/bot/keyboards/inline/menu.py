@@ -6,9 +6,13 @@ from src.bot.texts import (
     BTN_ANALYZE,
     BTN_COPY_DESCRIPTION,
     BTN_COPY_TITLE,
+    BTN_INFOGRAPHICS,
     BTN_PAGE_NEXT,
     BTN_PAGE_PREV,
     BTN_SKIP,
+    BTN_STYLE_BRIGHT_SALE,
+    BTN_STYLE_MINIMALISM,
+    BTN_STYLE_PREMIUM,
     BTN_TONE_HARSH,
     BTN_TONE_NEUTRAL,
     BTN_TONE_SOFT,
@@ -128,8 +132,32 @@ def seo_result_keyboard(text: SeoText) -> InlineKeyboardMarkup:
     ]
     if copy_buttons:
         builder.row(*copy_buttons)
+    builder.row(
+        InlineKeyboardButton(text=BTN_INFOGRAPHICS, callback_data="scene:infographics")
+    )
     builder.row(InlineKeyboardButton(text=BACK_TO_MENU, callback_data="menu:main"))
     return builder.as_markup()
+
+
+def infographic_variants() -> InlineKeyboardMarkup:
+    """Style picker for the infographics scene (issue #62)."""
+    return _build(
+        [
+            [
+                (BTN_STYLE_MINIMALISM, "scene:infographics:variant:minimalism"),
+                (BTN_STYLE_PREMIUM, "scene:infographics:variant:premium"),
+                (BTN_STYLE_BRIGHT_SALE, "scene:infographics:variant:bright_sale"),
+            ],
+            [(BACK_TO_MENU, "menu:main")],
+        ]
+    )
+
+
+def infographic_photo_setup() -> InlineKeyboardMarkup:
+    """Skip button while collecting customer photos (M7-v5)."""
+    return _build(
+        [[(BTN_SKIP, "scene:infographics:skip_photo")], [(BACK_TO_MENU, "menu:main")]]
+    )
 
 
 def reviews_rival_setup() -> InlineKeyboardMarkup:

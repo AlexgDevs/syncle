@@ -15,6 +15,7 @@ from aiogram.types import CallbackQuery, ErrorEvent, Message, Update
 from src.bot.texts import (
     CARD_NOT_FOUND,
     GENERIC_ERROR,
+    INFO_FAILED,
     LLM_RATE_LIMIT_TEXT,
     LLM_TIMEOUT_TEXT,
     LLM_UNAVAILABLE_TEXT,
@@ -36,6 +37,7 @@ from src.modules.analytics.errors import (
     UnsupportedMarketplaceError,
 )
 from src.modules.content.errors import SeoGenerationError
+from src.modules.infographics import InfographicsError
 from src.modules.reviews import ReviewAnalysisError, ReviewsFetchError
 
 logger = logging.getLogger(__name__)
@@ -58,6 +60,8 @@ def describe_error(exc: Exception) -> str:
         return REVIEWS_FETCH_FAILED
     if isinstance(exc, ReviewAnalysisError):
         return REVIEWS_FAILED
+    if isinstance(exc, InfographicsError):
+        return INFO_FAILED
     if isinstance(exc, LLMTimeoutError):
         return LLM_TIMEOUT_TEXT
     if isinstance(exc, LLMRateLimitError):
