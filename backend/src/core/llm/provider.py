@@ -22,3 +22,25 @@ class LLMProvider(Protocol):
             LLMError: Provider failure (timeout, rate limit, unavailable).
         """
         ...
+
+
+class ImageProvider(Protocol):
+    """Port for image generation/editing (infographics, issue #62)."""
+
+    async def generate_image(
+        self,
+        prompt: str,
+        *,
+        size: str,
+        images: list[bytes] | None = None,
+    ) -> bytes:
+        """Return one generated image as raw bytes for ``prompt``.
+
+        ``images`` are source photos sent through the edits endpoint so
+        real products are composited into the poster; None generates
+        from scratch.
+
+        Raises:
+            LLMError: Provider failure (timeout, rate limit, unavailable).
+        """
+        ...

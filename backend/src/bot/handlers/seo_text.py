@@ -3,10 +3,11 @@
 Photo messages are optional (issue #27): up to three file_ids are kept
 in FSM state, downloaded once right before the vision call, and merged
 into the request as attributes. Vision failures degrade to text-only
-with a RU hint instead of aborting generation.
+with a RU hint instead of aborting generation. The same bytes (and the
+file_ids for the taskiq path) go into the SEO stash for infographics
+(#62).
 """
 
-import io
 import logging
 
 from aiogram import Bot, F, Router
@@ -27,6 +28,7 @@ from src.bot.keyboards.inline import (
     seo_mp,
     seo_result_keyboard,
 )
+from src.bot.photos import PHOTO_CAP, append_photo_id, clean_file_ids, download_photos
 from src.bot.renderers import render_seo_report
 from src.bot.texts import (
     PROGRESS_STEPS,
@@ -43,6 +45,7 @@ from src.bot.texts import (
 )
 from src.bot.utils import safe_edit
 from src.core.llm import LLMError, get_vision_provider
+from src.core.stash import stash_seo
 from src.modules.analytics.enums import MARKETPLACES, Marketplace
 from src.modules.content import SeoAttributes, SeoRequest, get_seo_service
 from src.modules.content.errors import SeoGenerationError
@@ -53,7 +56,6 @@ logger = logging.getLogger(__name__)
 router = Router(name="seo_text")
 
 _MP_CALLBACK_PREFIX = "scene:seo:mp:"
-_MAX_PHOTOS = 3
 _MAX_ADVANTAGES = 3
 _MIN_DESCRIPTION_LEN = 3
 
@@ -105,22 +107,18 @@ async def _handle_photo(message: Message, state: FSMContext) -> None:
     if not photo_sizes:
         return
     data = await state.get_data()
-    raw_photos = data.get("photos")
-    photos = (
-        [p for p in raw_photos if isinstance(p, str)]
-        if isinstance(raw_photos, list)
-        else []
+    photos = append_photo_id(
+        clean_file_ids(data.get("photos")), photo_sizes[-1].file_id
     )
     group = message.media_group_id
-    if len(photos) >= _MAX_PHOTOS:
+    if photos is None:
         if group is None or group != data.get("media_group"):
-            await message.answer(SEO_PHOTO_LIMIT.format(cap=_MAX_PHOTOS))
+            await message.answer(SEO_PHOTO_LIMIT.format(cap=PHOTO_CAP))
         return
-    photos.append(photo_sizes[-1].file_id)
     await state.update_data(photos=photos, media_group=group)
     if group is None or group != data.get("media_group"):
         await message.answer(
-            SEO_PHOTO_RECEIVED.format(index=len(photos), cap=_MAX_PHOTOS)
+            SEO_PHOTO_RECEIVED.format(index=len(photos), cap=PHOTO_CAP)
         )
 
 
@@ -161,29 +159,27 @@ def _split_advantages(text: str) -> list[str]:
     return items[:_MAX_ADVANTAGES]
 
 
-async def _download_photos(bot: Bot, file_ids: list[str]) -> list[bytes]:
-    images: list[bytes] = []
-    for file_id in file_ids:
-        file = await bot.get_file(file_id)
-        buffer = io.BytesIO()
-        await bot.download(file, destination=buffer)
-        images.append(buffer.getvalue())
-    return images
-
-
-async def _describe_photos(
-    message: Message, photos: list[str], hint: str
-) -> SeoAttributes | None:
+async def _describe_photos(images: list[bytes], hint: str) -> SeoAttributes | None:
     """Vision call, best effort: None on any failure (issue #27)."""
     vision = get_vision_provider()
-    if vision is None or message.bot is None:
+    if vision is None:
         return None
     try:
-        images = await _download_photos(message.bot, photos)
         return await describe_product(vision, images, hint)
-    except (LLMError, SeoGenerationError, TelegramAPIError) as exc:
+    except (LLMError, SeoGenerationError) as exc:
         logger.warning("vision degraded: %s", type(exc).__name__)
         return None
+
+
+async def _download_best_effort(bot: Bot, file_ids: list[str]) -> list[bytes]:
+    """Seller photos for vision + the infographic stash; [] on failure."""
+    if not file_ids:
+        return []
+    try:
+        return await download_photos(bot, file_ids)
+    except TelegramAPIError:
+        logger.warning("photo download failed", exc_info=True)
+        return []
 
 
 async def _launch(message: Message, state: FSMContext) -> None:
@@ -204,20 +200,20 @@ async def _launch(message: Message, state: FSMContext) -> None:
         if isinstance(raw_advantages, list)
         else []
     )
-    raw_photos = data.get("photos")
-    photos = (
-        [p for p in raw_photos if isinstance(p, str)][:_MAX_PHOTOS]
-        if isinstance(raw_photos, list)
-        else []
-    )
+    photos = clean_file_ids(data.get("photos"))[:PHOTO_CAP]
 
     status = await message.answer(SEO_SCANNING if photos else SEO_LOADING)
 
+    # one download pass: vision input and the infographic stash (#62)
+    downloaded: list[bytes] = []
+    if photos and message.bot is not None:
+        downloaded = await _download_best_effort(message.bot, photos)
+
     attributes: SeoAttributes | None = None
-    if photos:
-        attributes = await _describe_photos(message, photos, description)
-        if attributes is None:
-            await message.answer(SEO_NO_VISION)
+    if downloaded:
+        attributes = await _describe_photos(downloaded, description)
+    if photos and attributes is None:
+        await message.answer(SEO_NO_VISION)
 
     request = _build_request(description, str(marketplace), advantages, attributes)
     if await launch_job_or_inline(
@@ -227,6 +223,8 @@ async def _launch(message: Message, state: FSMContext) -> None:
             **request.model_dump(mode="json"),
             "chat_id": message.chat.id,
             "status_message_id": status.message_id,
+            # taskiq path: the poller downloads these into the stash (#62)
+            "photo_file_ids": photos,
         },
     ):
         return
@@ -240,6 +238,7 @@ async def _launch(message: Message, state: FSMContext) -> None:
         )
 
     report = await get_seo_service().generate(request, on_progress=on_progress)
+    await stash_seo(message.chat.id, report.model_dump(mode="json"), downloaded or None)
     await state.clear()
     await sink.deliver(
         message.chat.id,

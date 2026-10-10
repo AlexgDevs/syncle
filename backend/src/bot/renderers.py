@@ -8,6 +8,7 @@ from src.modules.analytics import (
 )
 from src.modules.analytics.enums import MARKETPLACE_TITLES
 from src.modules.content import SeoText
+from src.modules.infographics import StyleVariant
 from src.modules.reviews import ReviewReport
 
 NO_DATA = "—"
@@ -363,3 +364,18 @@ def render_reviews_report(report: ReviewReport) -> str:
         for finding in report.findings
     )
     return _clamp(REVIEWS_REPORT.format(tone=tone, groups=groups), REPORT_LIMIT)
+
+
+INFGRAPHIC_CAPTION = "🖼 Инфографика · стиль: {style}"
+
+STYLE_TITLES = {
+    "minimalism": "минимализм",
+    "premium": "премиум",
+    "bright_sale": "яркая распродажа",
+}
+
+
+def render_infographic_caption(variant: StyleVariant) -> str:
+    """One-line photo caption for delivered artwork (issue #62)."""
+    style = STYLE_TITLES.get(str(variant), str(variant))
+    return INFGRAPHIC_CAPTION.format(style=style)

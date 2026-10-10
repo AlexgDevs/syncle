@@ -28,18 +28,18 @@ async def run() -> None:
     bot = Bot(token=settings.BOT_TOKEN)
     dispatcher = create_dispatcher()
 
-    redis_client = None
+    # Redis is required in every mode: the infographic stash reads/writes
+    # it even when jobs run inline (#62)
+    redis_client = await init_redis()
     poller = None
     if settings.JOBS_MODE == "taskiq":
-        redis_client = await init_redis()
         poller = await start_job_poller(bot)
     try:
         await dispatcher.start_polling(bot)
     finally:
         if poller is not None:
             await poller.stop()
-        if redis_client is not None:
-            await close_redis(redis_client)
+        await close_redis(redis_client)
 
 
 def main() -> None:
