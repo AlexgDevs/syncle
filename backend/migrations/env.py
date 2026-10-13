@@ -8,6 +8,7 @@ from alembic import context
 from src.core.database.base import Base
 from src.core.database.session import get_null_pool_engine
 from src.core.settings import get_settings
+import src.modules.legal.models  # noqa: F401
 import src.modules.user.models  # noqa: F401
 
 config = context.config
