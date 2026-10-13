@@ -115,6 +115,14 @@ class ExpressAnalysisService:
             )
         return report
 
+    async def fetch_card(self, source: str) -> CompetitorCard:
+        """Public single-card fetch for other modules (legal #59).
+
+        Raises the same typed errors as the parsers (CardParseError,
+        CardNotFoundError, OzonBrowserError, UnsupportedMarketplaceError).
+        """
+        return await self._fetch_card(source)
+
     async def _fetch_card(self, source: str) -> CompetitorCard:
         marketplace = _detect_marketplace(source)
         if marketplace is None:
