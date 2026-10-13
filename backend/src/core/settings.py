@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     # items per search page, Ozon 8 per tile page (4 pages cover the cap).
     NICHE_ITEM_CAP: int = 30
 
+    # Legal business scan (M6, #59/#60): SKU/links per run and documents cap
+    LEGAL_CARD_CAP: int = 10
+    LEGAL_DOCUMENT_CAP: int = 5
+
     @computed_field  # type: ignore
     @property
     def DATABASE_URL(self) -> PostgresDsn:

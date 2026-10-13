@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from src.bot.errors import describe_skip_code
 from src.modules.analytics import (
     AnalysisReport,
     CompetitorCard,
@@ -9,6 +10,12 @@ from src.modules.analytics import (
 from src.modules.analytics.enums import MARKETPLACE_TITLES
 from src.modules.content import SeoText
 from src.modules.infographics import StyleVariant
+from src.modules.legal import (
+    BusinessScanReport,
+    CardScanReport,
+    Finding,
+    Severity,
+)
 from src.modules.reviews import ReviewReport
 
 NO_DATA = "—"
@@ -379,3 +386,135 @@ def render_infographic_caption(variant: StyleVariant) -> str:
     """One-line photo caption for delivered artwork (issue #62)."""
     style = STYLE_TITLES.get(str(variant), str(variant))
     return INFGRAPHIC_CAPTION.format(style=style)
+
+
+LEGAL_HEADER = "🛡 Юридический сканер"
+
+LEGAL_NO_FINDINGS = "✅ Рисков по каталогу не найдено."
+
+LEGAL_SUMMARY = (
+    "🛡 Итого: критично {critical} · высокие {high} · " "средние {medium} · низкие {low}"
+)
+
+LEGAL_SKIPPED = "\n⚠️ Пропущено:\n{items}"
+
+LEGAL_SKIPPED_ITEM = "• {source}: {reason}"
+
+SEVERITY_EMOJI: dict[Severity, str] = {
+    Severity.CRITICAL: "🔴",
+    Severity.HIGH: "🟠",
+    Severity.MEDIUM: "🟡",
+    Severity.LOW: "⚪",
+}
+
+LEGAL_SOURCE = "\n\n📌 {source}\n{findings}"
+
+LEGAL_FINDING = "{emoji} {rule_id}{excerpt}\n{description}"
+
+LEGAL_FINDING_LLM = "{emoji} [LLM] {category}\n{description}"
+
+LEGAL_EXCERPT = "\n«{excerpt}»"
+
+LEGAL_FIELD_SUFFIX = " ({field})"
+
+LEGAL_DOCUMENT = "\n\n📄 {filename} · секций: {sections}\n{findings}"
+
+_COPY_LIMIT = 256  # Telegram CopyTextButton.text: 1-256 characters
+
+
+def _finding_line(finding: Finding) -> str:
+    excerpt = (
+        LEGAL_EXCERPT.format(excerpt=_clamp(finding.excerpt, 120))
+        if finding.excerpt
+        else ""
+    )
+    field = LEGAL_FIELD_SUFFIX.format(field=finding.field) if finding.field else ""
+    if finding.rule_id:
+        return LEGAL_FINDING.format(
+            emoji=SEVERITY_EMOJI[finding.severity],
+            rule_id=f"{finding.rule_id}{field}",
+            excerpt=excerpt,
+            description=_clamp(finding.description, 300),
+        )
+    return LEGAL_FINDING_LLM.format(
+        emoji=SEVERITY_EMOJI[finding.severity],
+        category=f"{finding.category.value}{field}",
+        description=_clamp(finding.description, 300),
+    )
+
+
+def _findings_block(findings: list[Finding]) -> str:
+    if not findings:
+        return LEGAL_NO_FINDINGS
+    return "\n".join(_finding_line(finding) for finding in findings)
+
+
+def _summary_line(report: BusinessScanReport) -> str:
+    counts = report.counts or {}
+    return LEGAL_SUMMARY.format(
+        critical=counts.get("critical", 0),
+        high=counts.get("high", 0),
+        medium=counts.get("medium", 0),
+        low=counts.get("low", 0),
+    )
+
+
+def _skipped_block(report: BusinessScanReport) -> str:
+    if not report.skipped:
+        return ""
+    items = "\n".join(
+        LEGAL_SKIPPED_ITEM.format(
+            source=item.source,
+            reason=describe_skip_code(item.error_code, item.source),
+        )
+        for item in report.skipped
+    )
+    return LEGAL_SKIPPED.format(items=items)
+
+
+def legal_finding_copy_text(finding: Finding) -> str:
+    """Copy-button payload clamped to Telegram's 256-char cap."""
+    parts = [finding.rule_id or finding.category.value, finding.description]
+    if finding.excerpt:
+        parts.append(f"«{finding.excerpt}»")
+    return _clamp(" — ".join(part for part in parts if part), _COPY_LIMIT)
+
+
+def render_legal_card_report(report: CardScanReport) -> str:
+    """Quick card scan report (M6, #55/#57)."""
+    body = _findings_block(report.findings)
+    if report.findings:
+        body = f"{_summary_line_counts(report.findings)}\n\n{body}"
+    header = LEGAL_HEADER
+    if report.source:
+        header = f"{header}\n📌 {report.source}"
+    return _clamp(f"{header}\n\n{body}", REPORT_LIMIT)
+
+
+def _summary_line_counts(findings: list[Finding]) -> str:
+    counts = {severity.value: 0 for severity in Severity}
+    for finding in findings:
+        counts[finding.severity.value] += 1
+    return LEGAL_SUMMARY.format(**counts)
+
+
+def render_legal_business_report(report: BusinessScanReport) -> str:
+    """Combined business audit report (M6, #59/#60)."""
+    blocks: list[str] = [LEGAL_HEADER, _summary_line(report)]
+    for card in report.cards:
+        source = card.source or "без источника"
+        blocks.append(
+            LEGAL_SOURCE.format(source=source, findings=_findings_block(card.findings))
+        )
+    for document in report.documents:
+        blocks.append(
+            LEGAL_DOCUMENT.format(
+                filename=document.filename,
+                sections=document.sections,
+                findings=_findings_block(document.findings),
+            )
+        )
+    skipped = _skipped_block(report)
+    if skipped:
+        blocks.append(skipped)
+    return _clamp("".join(blocks), REPORT_LIMIT)

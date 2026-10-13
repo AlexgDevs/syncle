@@ -187,8 +187,6 @@ STUB_TEXT = "Функция «{title}» — в разработке."
 STUB_TITLES = {
     "unit_calc": "Быстрый расчёт",
     "weekly_report": "Отчёт WB/Ozon",
-    "card_risks": "Риски карточки товара",
-    "legal_audit": "Комплексный аудит бизнеса",
 }
 
 UNKNOWN_SECTION = "Неизвестный раздел"
@@ -219,6 +217,75 @@ NICHE_SEARCH_FAILED = (
     "Попробуйте позже или измените запрос."
 )
 
+LEGAL_CARD_PROMPT = (
+    "🛡 Риски карточки товара\n\n"
+    "Отправьте ссылку на карточку WB/Ozon или артикул — "
+    "проверю текст по каталогу рисков."
+)
+
+LEGAL_INPUT_HINT = "Отправьте именно ссылку или артикул (текстом)."
+
+LEGAL_TEXT_SHORT = (
+    "Текст слишком короткий, чтобы искать риски.\n"
+    "Отправьте описание товара подробнее (от 10 символов)."
+)
+
+LEGAL_LOADING = "⏳ Проверяю карточку по каталогу рисков…"
+
+LEGAL_CARD_DONE = "🛡 Аудит карточки готов"
+
+LEGAL_AUDIT_PROMPT = (
+    "📋 Комплексный аудит бизнеса\n\n"
+    "Пришлите ссылки/артикулы карточек товара (можно несколько, по одной "
+    "за раз) — или нажмите «Пропустить» и перейдите к следующему шагу."
+)
+
+LEGAL_AUDIT_TEXT_PROMPT = (
+    "✍️ Пришлите текст для проверки (описание компании, условия доставки, "
+    "политика возврата — что угодно), или нажмите «Пропустить»."
+)
+
+LEGAL_AUDIT_DOCS_PROMPT = (
+    "📄 Пришлите документы для проверки: PDF, DOCX, XLSX или CSV "
+    "(до {cap} шт, по одному за раз).\n"
+    "Когда закончите — нажмите «Готово»."
+)
+
+BTN_LEGAL_DONE = "✅ Готово"
+
+LEGAL_SOURCE_ADDED = "✅ Карточка добавлена в аудит: {source} (всего: {count})"
+
+LEGAL_CARD_CAP_REACHED = "Карточек уже максимум — {cap}. Нажмите «Пропустить»."
+
+LEGAL_NO_INPUT = (
+    "Для аудита нужно хотя бы одно условие: карточка, текст или документ.\n"
+    "Начните заново и пришлите хотя бы карточку."
+)
+
+LEGAL_DOC_RECEIVED = "📄 Документ принят: {filename} (всего: {count})"
+
+LEGAL_DOC_CAP = "Документов уже максимум — {cap}. Нажмите «Готово»."
+
+LEGAL_DOC_UNSUPPORTED = (
+    "Формат «{filename}» не поддерживается.\n" "Доступны: PDF, DOCX, XLSX, CSV."
+)
+
+LEGAL_DOC_FAILED = (
+    "⚠️ Не удалось загрузить документ «{filename}».\nПопробуйте отправить его ещё раз."
+)
+
+LEGAL_AUDIT_LOADING = "⏳ Запускаю комплексный аудит…"
+
+LEGAL_SCANNING_CARDS = "🛡 Проверяю карточки по каталогу рисков…"
+
+LEGAL_SCANNING_DOCUMENTS = "📄 Проверяю документы…"
+
+LEGAL_LLM_REVIEW = "🔎 Дополнительная проверка LLM…"
+
+LEGAL_SCAN_FAILED = "⚠️ Не удалось выполнить юридический скан. Попробуйте ещё раз."
+
+LEGAL_DOCUMENT_FAILED = "⚠️ Не удалось разобрать документ. Попробуйте другой файл."
+
 GENERIC_ERROR = "Что-то пошло не так. Попробуйте позже."
 
 ANALYSIS_LOADING = "⏳ Сравниваю карточки…"
@@ -235,6 +302,9 @@ PROGRESS_STEPS = {
     "composing_prompt": INFO_COMPOSING,
     "rendering_image": INFO_LOADING,
     "structuring_brief": INFO_STRUCTURING,
+    "scanning_cards": LEGAL_SCANNING_CARDS,
+    "scanning_documents": LEGAL_SCANNING_DOCUMENTS,
+    "llm_review": LEGAL_LLM_REVIEW,
 }
 
 JOB_FAILED = "⚠️ Не получилось проанализировать карточки. Попробуйте ещё раз."

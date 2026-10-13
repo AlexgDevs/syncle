@@ -17,11 +17,13 @@ from src.core.redis.client import get_redis
 from src.modules.analytics.jobs import register_analytics_jobs
 from src.modules.content.jobs import register_content_jobs
 from src.modules.infographics.jobs import register_infographics_jobs
+from src.modules.legal.jobs import register_legal_jobs
 from src.modules.reviews.jobs import register_reviews_jobs
 
 register_analytics_jobs()
 register_content_jobs()
 register_infographics_jobs()
+register_legal_jobs()
 register_reviews_jobs()
 
 broker = get_broker()
