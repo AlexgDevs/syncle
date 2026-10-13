@@ -12,11 +12,16 @@ shapes.
 The per-poster customer brief (M7-v5) lives under its own key
 (``syncle:stash:infobrief:{chat_id}``) so writing it never disturbs the
 SEO report: ``{"brief": "...", "photos": ["<b64>", ...]}``.
+
+Seller documents for the legal business scan (M6, #59/#60) follow the
+same pattern under ``syncle:stash:legaldocs:{chat_id}``:
+``{"documents": [{"filename": "...", "data": "<b64>"}, ...]}``.
 """
 
 import base64
 import json
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -43,12 +48,23 @@ class BriefEntry:
     photos: list[bytes] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class DocumentsEntry:
+    """Stashed seller documents (M6 legal #59): (filename, raw bytes)."""
+
+    documents: list[tuple[str, bytes]] = field(default_factory=list)
+
+
 def _stash_key(chat_id: int) -> str:
     return f"syncle:stash:seo:{chat_id}"
 
 
 def _brief_key(chat_id: int) -> str:
     return f"syncle:stash:infobrief:{chat_id}"
+
+
+def _documents_key(chat_id: int) -> str:
+    return f"syncle:stash:legaldocs:{chat_id}"
 
 
 def _encode_photos(photos: list[bytes] | None) -> list[str]:
@@ -145,3 +161,54 @@ async def load_stashed_seo(chat_id: int) -> dict[str, Any] | None:
     """Return the stored report only, or None when absent/expired."""
     entry = await load_stashed_entry(chat_id)
     return entry.seo if entry is not None else None
+
+
+async def stash_documents(chat_id: int, documents: Sequence[tuple[str, bytes]]) -> None:
+    """Remember uploaded seller documents for the legal scan (#59).
+
+    Failures only drop the documents: the business scan then runs on
+    cards and free text alone.
+    """
+    payload = {
+        "documents": [
+            {"filename": filename, "data": base64.b64encode(data).decode("ascii")}
+            for filename, data in documents
+        ]
+    }
+    try:
+        await get_redis().set(
+            _documents_key(chat_id),
+            json.dumps(payload, ensure_ascii=False),
+            ex=STASH_TTL_SECONDS,
+        )
+    except Exception:  # noqa: BLE001 — the scan proceeds without documents
+        logger.warning("documents stash write failed", exc_info=True)
+
+
+async def load_documents(chat_id: int) -> list[tuple[str, bytes]]:
+    """Return stashed documents, or [] on absence/expiry/corruption."""
+    try:
+        raw = await get_redis().get(_documents_key(chat_id))
+    except Exception:  # noqa: BLE001 — the scan proceeds without documents
+        logger.warning("documents stash read failed", exc_info=True)
+        return []
+    if not raw:
+        return []
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return []
+    if not isinstance(data, dict) or not isinstance(data.get("documents"), list):
+        return []
+    documents: list[tuple[str, bytes]] = []
+    for item in data["documents"]:
+        if not isinstance(item, dict):
+            continue
+        filename, encoded = item.get("filename"), item.get("data")
+        if not isinstance(filename, str) or not isinstance(encoded, str):
+            continue
+        try:
+            documents.append((filename, base64.b64decode(encoded)))
+        except ValueError:
+            logger.warning("stash document unreadable; skipping")
+    return documents

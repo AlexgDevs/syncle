@@ -6,6 +6,7 @@ The future API adapter implements the same contract as JSON responses.
 """
 
 import logging
+from urllib.parse import urlparse
 
 from aiogram import Bot, Dispatcher
 from aiogram.exceptions import TelegramAPIError
@@ -16,6 +17,9 @@ from src.bot.texts import (
     CARD_NOT_FOUND,
     GENERIC_ERROR,
     INFO_FAILED,
+    LEGAL_DOC_UNSUPPORTED,
+    LEGAL_DOCUMENT_FAILED,
+    LEGAL_SCAN_FAILED,
     LLM_RATE_LIMIT_TEXT,
     LLM_TIMEOUT_TEXT,
     LLM_UNAVAILABLE_TEXT,
@@ -38,6 +42,8 @@ from src.modules.analytics.errors import (
 )
 from src.modules.content.errors import SeoGenerationError
 from src.modules.infographics import InfographicsError
+from src.modules.legal import LegalDocumentError, LegalScanError
+from src.modules.legal.schemas import SkipErrorCode
 from src.modules.reviews import ReviewAnalysisError, ReviewsFetchError
 
 logger = logging.getLogger(__name__)
@@ -62,12 +68,47 @@ def describe_error(exc: Exception) -> str:
         return REVIEWS_FAILED
     if isinstance(exc, InfographicsError):
         return INFO_FAILED
+    if isinstance(exc, LegalDocumentError):
+        return LEGAL_DOCUMENT_FAILED
+    if isinstance(exc, LegalScanError):
+        return LEGAL_SCAN_FAILED
     if isinstance(exc, LLMTimeoutError):
         return LLM_TIMEOUT_TEXT
     if isinstance(exc, LLMRateLimitError):
         return LLM_RATE_LIMIT_TEXT
     if isinstance(exc, LLMUnavailableError):
         return LLM_UNAVAILABLE_TEXT
+    return GENERIC_ERROR
+
+
+def _marketplace_name(source: str) -> str:
+    host = urlparse(source).netloc.lower()
+    label = host.removeprefix("www.").split(".")[0] if host else ""
+    return label.title() if label else "—"
+
+
+def describe_skip_code(code: SkipErrorCode | str, source: str = "") -> str:
+    """RU text for a skipped business-scan item (#59/#60).
+
+    Same contract as :func:`describe_error`: machines store the code,
+    users read Russian.
+    """
+    try:
+        skip = SkipErrorCode(code)
+    except ValueError:
+        return GENERIC_ERROR
+    if skip == SkipErrorCode.CARD_NOT_FOUND:
+        return CARD_NOT_FOUND
+    if skip == SkipErrorCode.OZON_UNAVAILABLE:
+        return OZON_BROWSER_UNAVAILABLE
+    if skip == SkipErrorCode.UNSUPPORTED_MARKETPLACE:
+        return UNSUPPORTED_MARKETPLACE.format(name=_marketplace_name(source))
+    if skip == SkipErrorCode.PARSE_FAILED:
+        return PARSE_FAILED
+    if skip == SkipErrorCode.UNSUPPORTED_DOCUMENT:
+        return LEGAL_DOC_UNSUPPORTED.format(filename=source)
+    if skip == SkipErrorCode.DOCUMENT_PARSE_FAILED:
+        return LEGAL_DOCUMENT_FAILED
     return GENERIC_ERROR
 
 

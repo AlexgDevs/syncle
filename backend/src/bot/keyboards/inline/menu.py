@@ -1,12 +1,14 @@
 from aiogram.types import CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from src.bot.renderers import legal_finding_copy_text
 from src.bot.texts import (
     BACK_TO_MENU,
     BTN_ANALYZE,
     BTN_COPY_DESCRIPTION,
     BTN_COPY_TITLE,
     BTN_INFOGRAPHICS,
+    BTN_LEGAL_DONE,
     BTN_PAGE_NEXT,
     BTN_PAGE_PREV,
     BTN_SKIP,
@@ -21,6 +23,7 @@ from src.bot.texts import (
 from src.modules.analytics.enums import MARKETPLACE_TITLES
 from src.modules.analytics.schemas import Review
 from src.modules.content import SeoText
+from src.modules.legal import BusinessScanReport
 from src.modules.reviews import ReviewReport
 
 MAIN_ROWS = [
@@ -44,8 +47,8 @@ MENU_ROWS = {
         [("🏷 Аудит и авто-теги отзывов", "scene:reviews")],
     ],
     "legal": [
-        [("🛡 Риски карточки товара", "stub:card_risks")],
-        [("📋 Комплексный аудит бизнеса", "stub:legal_audit")],
+        [("🛡 Риски карточки товара", "scene:legal:card")],
+        [("📋 Комплексный аудит бизнеса", "scene:legal:audit")],
     ],
 }
 
@@ -250,5 +253,52 @@ def reviews_result_keyboard(report: ReviewReport) -> InlineKeyboardMarkup:
                 copy_text=CopyTextButton(text="\n".join(finding.points)),
             )
         )
+    builder.row(InlineKeyboardButton(text=BACK_TO_MENU, callback_data="menu:main"))
+    return builder.as_markup()
+
+
+def legal_audit_skip_setup() -> InlineKeyboardMarkup:
+    """Skip button while collecting audit sources/documents (M6, #60)."""
+    return _build(
+        [[(BTN_SKIP, "scene:legal:audit:skip")], [(BACK_TO_MENU, "menu:main")]]
+    )
+
+
+def legal_audit_docs_setup() -> InlineKeyboardMarkup:
+    """Done button while collecting audit documents (M6, #60)."""
+    return _build(
+        [[(BTN_LEGAL_DONE, "scene:legal:audit:done")], [(BACK_TO_MENU, "menu:main")]]
+    )
+
+
+LEGAL_COPY_CAP = 10  # keeps the result keyboard small
+
+
+def legal_result_keyboard(report: BusinessScanReport) -> InlineKeyboardMarkup:
+    """Copy buttons for up to the first ``LEGAL_COPY_CAP`` findings."""
+    builder = InlineKeyboardBuilder()
+    copied = 0
+    for card in report.cards:
+        for finding in card.findings:
+            if copied >= LEGAL_COPY_CAP:
+                break
+            builder.row(
+                InlineKeyboardButton(
+                    text=f"{finding.rule_id or 'LLM'} · {finding.severity.value}",
+                    copy_text=CopyTextButton(text=legal_finding_copy_text(finding)),
+                )
+            )
+            copied += 1
+    for document in report.documents:
+        for finding in document.findings:
+            if copied >= LEGAL_COPY_CAP:
+                break
+            builder.row(
+                InlineKeyboardButton(
+                    text=f"{finding.rule_id or 'LLM'} · {finding.severity.value}",
+                    copy_text=CopyTextButton(text=legal_finding_copy_text(finding)),
+                )
+            )
+            copied += 1
     builder.row(InlineKeyboardButton(text=BACK_TO_MENU, callback_data="menu:main"))
     return builder.as_markup()

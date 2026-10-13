@@ -17,6 +17,7 @@ from src.bot.delivery import AiogramResultSink
 from src.bot.keyboards.inline import (
     back_menu,
     infographic_variants,
+    legal_result_keyboard,
     reviews_result_keyboard,
     seo_result_keyboard,
 )
@@ -25,6 +26,8 @@ from src.bot.photos import download_photos
 from src.bot.renderers import (
     render_analysis_report,
     render_infographic_caption,
+    render_legal_business_report,
+    render_legal_card_report,
     render_reviews_report,
     render_seo_report,
 )
@@ -33,6 +36,7 @@ from src.bot.texts import (
     INFO_FAILED,
     JOB_CANCELLED,
     JOB_FAILED,
+    LEGAL_CARD_DONE,
     PROGRESS_STEPS,
 )
 from src.core.jobs.base import JobInfo, JobState, active_jobs_key, as_text, job_key
@@ -47,6 +51,9 @@ from src.modules.content import SeoText
 from src.modules.content.jobs import SEO_JOB_TYPE
 from src.modules.infographics import RenderedArtwork
 from src.modules.infographics.jobs import INFOGRAPHICS_JOB_TYPE
+from src.modules.legal import BusinessScanReport
+from src.modules.legal.jobs import LEGAL_CARD_JOB_TYPE, LEGAL_JOB_TYPE
+from src.modules.legal.schemas import CardScanReport
 from src.modules.reviews import ReviewReport
 from src.modules.reviews.jobs import REVIEWS_JOB_TYPE
 
@@ -182,6 +189,21 @@ class JobPoller:
                 info,
                 render_reviews_report(reviews_report),
                 reply_markup=reviews_result_keyboard(reviews_report),
+            )
+            return
+        if info.job_type == LEGAL_CARD_JOB_TYPE:
+            card_report = CardScanReport.model_validate_json(info.result)
+            await self._deliver_terminal(
+                info,
+                f"{LEGAL_CARD_DONE}\n\n{render_legal_card_report(card_report)}",
+            )
+            return
+        if info.job_type == LEGAL_JOB_TYPE:
+            legal_report = BusinessScanReport.model_validate_json(info.result)
+            await self._deliver_terminal(
+                info,
+                render_legal_business_report(legal_report),
+                reply_markup=legal_result_keyboard(legal_report),
             )
             return
         analysis = AnalysisReport.model_validate_json(info.result)
