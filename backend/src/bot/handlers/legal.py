@@ -45,6 +45,7 @@ from src.bot.texts import (
     LEGAL_DOC_CAP,
     LEGAL_DOC_FAILED,
     LEGAL_DOC_RECEIVED,
+    LEGAL_DOC_TOO_BIG,
     LEGAL_DOC_UNSUPPORTED,
     LEGAL_INPUT_HINT,
     LEGAL_LOADING,
@@ -76,6 +77,10 @@ _DOC_SUFFIXES = (".pdf", ".docx", ".xlsx", ".csv")
 LEGAL_AUDIT_DOCS_HINT = (
     "Пришлите документ файлом (PDF, DOCX, XLSX, CSV) или нажмите «Готово»."
 )
+
+
+def _too_big(size: int | None) -> bool:
+    return size is not None and size > get_settings().LEGAL_DOCUMENT_MAX_BYTES
 
 
 class LegalCardScene(StatesGroup):
@@ -248,6 +253,10 @@ async def handle_audit_document(message: Message, state: FSMContext) -> None:
     if message.document is None or message.bot is None:
         await message.answer(LEGAL_DOC_FAILED.format(filename=filename))
         return
+    if _too_big(message.document.file_size):
+        cap_mb = get_settings().LEGAL_DOCUMENT_MAX_BYTES // (1024 * 1024)
+        await message.answer(LEGAL_DOC_TOO_BIG.format(mb=cap_mb))
+        return
     data = await state.get_data()
     documents = [item for item in data.get("documents", []) if isinstance(item, dict)]
     cfg = get_settings()
@@ -265,6 +274,11 @@ async def handle_audit_document(message: Message, state: FSMContext) -> None:
         return
     if not downloaded:
         await message.answer(LEGAL_DOC_FAILED.format(filename=filename))
+        return
+    if len(downloaded) > cfg.LEGAL_DOCUMENT_MAX_BYTES:
+        await message.answer(
+            LEGAL_DOC_TOO_BIG.format(mb=cfg.LEGAL_DOCUMENT_MAX_BYTES // (1024 * 1024))
+        )
         return
     documents.append(
         {
