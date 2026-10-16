@@ -34,6 +34,7 @@ from src.modules.reviews import ReviewReport
 
 MAIN_ROWS = [
     [("📊 Аналитика ниши", "menu:niche")],
+    [(SEO_MENU_LABEL, "scene:seo")],
     [("💰 Финансы и юнит-экономика", "menu:finance")],
     [("⭐ Репутация и отзывы", "menu:reputation")],
     [("⚖️ Юридический сканер", "menu:legal")],
@@ -43,7 +44,6 @@ MENU_ROWS = {
     "niche": [
         [("⚡ Экспресс-анализ конкурента", "scene:express")],
         [("🔍 Глубокий скан ниши", "scene:deep_scan")],
-        [(SEO_MENU_LABEL, "scene:seo")],
     ],
     "finance": [
         [("🧮 Быстрый расчёт", "scene:finance:calc")],
