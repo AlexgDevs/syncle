@@ -16,6 +16,10 @@ SEO report: ``{"brief": "...", "photos": ["<b64>", ...]}``.
 Seller documents for the legal business scan (M6, #59/#60) follow the
 same pattern under ``syncle:stash:legaldocs:{chat_id}``:
 ``{"documents": [{"filename": "...", "data": "<b64>"}, ...]}``.
+
+The settlement report upload for the finance analysis (M5, #52) keeps a
+single file under ``syncle:stash:finreport:{chat_id}``:
+``{"filename": "...", "data": "<b64>"}``.
 """
 
 import base64
@@ -26,10 +30,20 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from src.core.redis import get_redis
+from src.core.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
 STASH_TTL_SECONDS = 24 * 60 * 60
+
+
+def _jobs_only() -> bool:
+    """True when job-only stash entries are actually read (taskiq mode).
+
+    Documents and reports are consumed exclusively by job handlers; in
+    inline mode writing them would only waste Redis memory (plan A).
+    """
+    return get_settings().JOBS_MODE == "taskiq"
 
 
 @dataclass(frozen=True)
@@ -65,6 +79,10 @@ def _brief_key(chat_id: int) -> str:
 
 def _documents_key(chat_id: int) -> str:
     return f"syncle:stash:legaldocs:{chat_id}"
+
+
+def _report_key(chat_id: int) -> str:
+    return f"syncle:stash:finreport:{chat_id}"
 
 
 def _encode_photos(photos: list[bytes] | None) -> list[str]:
@@ -167,8 +185,11 @@ async def stash_documents(chat_id: int, documents: Sequence[tuple[str, bytes]]) 
     """Remember uploaded seller documents for the legal scan (#59).
 
     Failures only drop the documents: the business scan then runs on
-    cards and free text alone.
+    cards and free text alone. Skipped outside taskiq mode — only the
+    job handler reads this entry.
     """
+    if not _jobs_only():
+        return
     payload = {
         "documents": [
             {"filename": filename, "data": base64.b64encode(data).decode("ascii")}
@@ -212,3 +233,51 @@ async def load_documents(chat_id: int) -> list[tuple[str, bytes]]:
         except ValueError:
             logger.warning("stash document unreadable; skipping")
     return documents
+
+
+async def stash_report(chat_id: int, filename: str, data: bytes) -> None:
+    """Remember the uploaded settlement report for the chat (#52).
+
+    Failures only drop the file: the job then answers with a stale-file
+    hint instead of crashing. Skipped outside taskiq mode — only the job
+    handler reads this entry.
+    """
+    if not _jobs_only():
+        return
+    payload = {
+        "filename": filename,
+        "data": base64.b64encode(data).decode("ascii"),
+    }
+    try:
+        await get_redis().set(
+            _report_key(chat_id),
+            json.dumps(payload, ensure_ascii=False),
+            ex=STASH_TTL_SECONDS,
+        )
+    except Exception:  # noqa: BLE001 — the job degrades to a hint
+        logger.warning("report stash write failed", exc_info=True)
+
+
+async def load_report(chat_id: int) -> tuple[str, bytes] | None:
+    """Return stashed (filename, bytes), or None on absence/expiry."""
+    try:
+        raw = await get_redis().get(_report_key(chat_id))
+    except Exception:  # noqa: BLE001 — the job answers with a hint
+        logger.warning("report stash read failed", exc_info=True)
+        return None
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    filename, encoded = data.get("filename"), data.get("data")
+    if not isinstance(filename, str) or not isinstance(encoded, str):
+        return None
+    try:
+        return filename, base64.b64decode(encoded)
+    except ValueError:
+        logger.warning("stash report unreadable; dropping")
+        return None

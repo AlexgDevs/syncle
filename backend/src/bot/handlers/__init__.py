@@ -2,6 +2,7 @@ from aiogram import Router
 
 from src.bot.handlers.deep_scan import router as deep_scan_router
 from src.bot.handlers.express_analysis import router as express_router
+from src.bot.handlers.finance import router as finance_router
 from src.bot.handlers.infographics import router as infographics_router
 from src.bot.handlers.legal import router as legal_router
 from src.bot.handlers.menu import router as menu_router
@@ -19,3 +20,4 @@ def setup_handlers(router: Router) -> None:
     router.include_router(reviews_router)
     router.include_router(infographics_router)
     router.include_router(legal_router)
+    router.include_router(finance_router)

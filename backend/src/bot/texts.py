@@ -184,10 +184,8 @@ INFO_HINT = "Воспользуйтесь кнопками ниже."
 
 STUB_TEXT = "Функция «{title}» — в разработке."
 
-STUB_TITLES = {
-    "unit_calc": "Быстрый расчёт",
-    "weekly_report": "Отчёт WB/Ozon",
-}
+# finance menu entries became real scenes (M5, #48/#52); no stubs remain
+STUB_TITLES: dict[str, str] = {}
 
 UNKNOWN_SECTION = "Неизвестный раздел"
 
@@ -270,6 +268,8 @@ LEGAL_DOC_UNSUPPORTED = (
     "Формат «{filename}» не поддерживается.\n" "Доступны: PDF, DOCX, XLSX, CSV."
 )
 
+LEGAL_DOC_TOO_BIG = "Файл слишком большой — до {mb} МБ. Разделите выгрузку на части."
+
 LEGAL_DOC_FAILED = (
     "⚠️ Не удалось загрузить документ «{filename}».\nПопробуйте отправить его ещё раз."
 )
@@ -285,6 +285,71 @@ LEGAL_LLM_REVIEW = "🔎 Дополнительная проверка LLM…"
 LEGAL_SCAN_FAILED = "⚠️ Не удалось выполнить юридический скан. Попробуйте ещё раз."
 
 LEGAL_DOCUMENT_FAILED = "⚠️ Не удалось разобрать документ. Попробуйте другой файл."
+
+# --- Finance (M5, #48/#52) ---
+
+FIN_CALC_START = (
+    "🧮 Быстрый расчёт юнит-экономики\n\n" "1/4 — Цена продажи за единицу, ₽"
+)
+
+FIN_COST_PROMPT = (
+    "2/4 — Себестоимость единицы, ₽ (закупка, упаковка, доставка до склада)"
+)
+
+FIN_EXPENSES_PROMPT = (
+    "3/4 — Расходы на единицу, ₽ (комиссия, логистика, хранение, реклама — "
+    "если считаете отдельно)"
+)
+
+FIN_QUANTITY_PROMPT = "4/4 — Количество единиц за период (например, за месяц)"
+
+FIN_NUMBER_HINT = "Отправьте числом, например: 899,99"
+
+FIN_INVALID_POSITIVE = "Введите число больше нуля. Пример: 899,99"
+
+FIN_INVALID_NON_NEGATIVE = "Введите число не меньше нуля. Пример: 0"
+
+FIN_INVALID_QUANTITY = "Введите целое число больше нуля. Пример: 100"
+
+FIN_REPORT_PROMPT = (
+    "📁 Разбор отчёта о расчётах\n\n"
+    "Отправьте файлом выгрузку WB или Ozon: XLSX, CSV или PDF."
+)
+
+FIN_REPORT_UNSUPPORTED = (
+    "Формат «{filename}» не поддерживается.\nДоступны: XLSX, CSV, PDF."
+)
+
+FIN_REPORT_TOO_BIG = (
+    "Файл слишком большой — до {mb} МБ.\nОтправьте выгрузку за меньший период."
+)
+
+FIN_REPORT_DOWNLOAD_FAILED = (
+    "⚠️ Не удалось скачать «{filename}».\nОтправьте файл ещё раз."
+)
+
+FIN_REPORT_EMPTY = (
+    "⚠️ Не удалось разобрать отчёт: нет таблицы с расчётами.\n"
+    "Убедитесь, что это отчёт о расчётах (выгрузка WB/Ozon)."
+)
+
+FIN_REPORT_STALE = (
+    "Файл отчёта не найден или истёк срок хранения.\nОтправьте его заново."
+)
+
+FIN_REPORT_LOADING = "⏳ Разбираю отчёт…"
+
+FIN_REPORT_FILE_READY = "📊 Отчёт большой — отправляю файлом"
+
+BTN_FIN_COPY = "📋 Копировать расчёт"
+
+BTN_WIF_PRICE_UP = "📈 Цена +10%"
+
+BTN_WIF_PRICE_DOWN = "📉 Цена −10%"
+
+BTN_WIF_QTY_UP = "📦 Объём +10%"
+
+BTN_WIF_QTY_DOWN = "📦 Объём −10%"
 
 GENERIC_ERROR = "Что-то пошло не так. Попробуйте позже."
 
@@ -305,6 +370,8 @@ PROGRESS_STEPS = {
     "scanning_cards": LEGAL_SCANNING_CARDS,
     "scanning_documents": LEGAL_SCANNING_DOCUMENTS,
     "llm_review": LEGAL_LLM_REVIEW,
+    "parsing_report": FIN_REPORT_LOADING,
+    "analyzing_fees": "🔎 Ищу скрытые комиссии и штрафы…",
 }
 
 JOB_FAILED = "⚠️ Не получилось проанализировать карточки. Попробуйте ещё раз."

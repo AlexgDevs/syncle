@@ -33,6 +33,7 @@ async def init_redis() -> Redis:
 
         await client.ping()
         _client = client
+        await _warn_if_unbounded(client)
         return client
 
     except AuthenticationError:
@@ -58,3 +59,22 @@ async def close_redis(client: Redis) -> None:
     await client.aclose()
     if _client is client:
         _client = None
+
+
+async def _warn_if_unbounded(client: Redis) -> None:
+    """Warn when Redis has no memory limit (plan A guard, config/redis.conf)."""
+    try:
+        raw = await client.config_get("maxmemory")
+    except Exception:  # noqa: BLE001 — never block startup on a probe
+        return
+    limit = raw.get("maxmemory") if isinstance(raw, dict) else None
+    try:
+        unlimited = int(limit or 0) == 0
+    except TypeError, ValueError:
+        return
+    if unlimited:
+        logger.warning(
+            "Redis has no maxmemory limit (noeviction): stash blobs can OOM "
+            "the host under load — set maxmemory + volatile-ttl "
+            "(see config/redis.conf)"
+        )

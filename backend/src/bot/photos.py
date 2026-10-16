@@ -5,6 +5,7 @@ import io
 from aiogram import Bot
 
 PHOTO_CAP = 3  # shared cap for the SEO (#27) and infographics (#62) scenes
+PHOTO_MAX_BYTES = 5 * 1024 * 1024  # plan A memory guard: bytes per photo
 
 
 def clean_file_ids(raw: object) -> list[str]:
@@ -22,11 +23,18 @@ def append_photo_id(file_ids: list[str], file_id: str) -> list[str] | None:
 
 
 async def download_photos(bot: Bot, file_ids: list[str]) -> list[bytes]:
-    """Download Telegram files as raw bytes, in order."""
+    """Download Telegram files as raw bytes, in order.
+
+    Files larger than ``PHOTO_MAX_BYTES`` are skipped (the callers
+    degrade to fewer photos; plan A memory guard).
+    """
     images: list[bytes] = []
     for file_id in file_ids:
         file = await bot.get_file(file_id)
         buffer = io.BytesIO()
         await bot.download(file, destination=buffer)
-        images.append(buffer.getvalue())
+        data = buffer.getvalue()
+        if len(data) > PHOTO_MAX_BYTES:
+            continue
+        images.append(data)
     return images

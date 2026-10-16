@@ -91,6 +91,11 @@ class Settings(BaseSettings):
     # Legal business scan (M6, #59/#60): SKU/links per run and documents cap
     LEGAL_CARD_CAP: int = 10
     LEGAL_DOCUMENT_CAP: int = 5
+    # bytes per uploaded legal document (plan A memory guard, capped too)
+    LEGAL_DOCUMENT_MAX_BYTES: int = 10 * 1024 * 1024
+
+    # Settlement report upload (M5, #49/#52): bytes cap checked at the bot edge
+    FINANCE_REPORT_MAX_BYTES: int = 10 * 1024 * 1024
 
     @computed_field  # type: ignore
     @property
