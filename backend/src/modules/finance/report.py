@@ -32,8 +32,20 @@ _COLUMN_SYNONYMS: dict[str, tuple[str, ...]] = {
     "storage": ("хранен", "storage"),
     "fines": ("штраф", "penalt", "fine"),
     "adjustments": ("корректи", "перерасчет", "перерасчёт", "адресн", "adjust"),
-    "sales": ("продаж", "выручк", "sales", "revenue", "оборот"),
+    "sales": (
+        "продаж",
+        "выручк",
+        "sales",
+        "revenue",
+        "оборот",
+        "цена реализации",
+        "к перечислению",
+        "перечислен",
+    ),
 }
+
+# Quantity markers: "Кол-во продаж" is a count, never a sales amount
+_QUANTITY_MARKERS = ("кол-во", "количество", "шт", "индекс")
 
 _FIELDS = (
     "period",
@@ -90,22 +102,34 @@ def _normalize_header(cell: str) -> str:
 def _match_field(header: str) -> str | None:
     normalized = _normalize_header(header)
     for field in _FIELDS:
+        if field == "sales" and any(m in normalized for m in _QUANTITY_MARKERS):
+            continue
         if any(synonym in normalized for synonym in _COLUMN_SYNONYMS[field]):
             return field
     return None
 
 
 def _find_header(rows: list[list[str]]) -> tuple[int, dict[int, str]] | None:
-    """Locate the header row and its column → field mapping (#50)."""
-    for index, row in enumerate(rows[:10]):
+    """Locate the header row and its column → field mapping (#50).
+
+    Scans the whole table: multi-sheet seller exports put a summary block
+    first, so a fixed 10-row window misses the real detail header. The
+    candidate with the most matched fields wins (first on ties).
+    """
+    best: tuple[int, dict[int, str]] | None = None
+    best_score = 0
+    for index, row in enumerate(rows):
         mapping: dict[int, str] = {}
         for column, cell in enumerate(row):
             field = _match_field(cell)
             if field is not None and field not in mapping.values():
                 mapping[column] = field
-        if len(mapping) >= _MIN_MATCHES:
-            return index, mapping
-    return None
+        if len(mapping) >= _MIN_MATCHES and len(mapping) > best_score:
+            best = (index, mapping)
+            best_score = len(mapping)
+            if best_score == len(_FIELDS):
+                break
+    return best
 
 
 def _cell(row: list[str], column: int) -> str:
@@ -114,11 +138,24 @@ def _cell(row: list[str], column: int) -> str:
     return row[column]
 
 
+def _is_section_title(row: list[str]) -> bool:
+    """Single non-empty cell holding text — a sheet/section banner.
+
+    Multi-sheet exports are flattened into one stream; a banner after the
+    data rows marks the end of the mapped table (the next sheet starts).
+    """
+    non_empty = [cell.strip() for cell in row if cell.strip()]
+    if len(non_empty) != 1:
+        return False
+    return parse_money(non_empty[0]) is None
+
+
 def map_rows(rows: list[list[str]]) -> list[SettlementRow]:
     """Map raw table rows onto ``SettlementRow`` items (#50).
 
-    Falls back to a positional guess (first row = header) when no header
-    matches the synonyms; returns [] when there is nothing to map.
+    Picks the best matching header across the whole document and stops
+    the table at the next section banner; returns [] when there is
+    nothing to map.
     """
     if not rows:
         return []
@@ -136,6 +173,8 @@ def map_rows(rows: list[list[str]]) -> list[SettlementRow]:
     mapped: list[SettlementRow] = []
     for index, row in enumerate(rows[header_index + 1 :], start=header_index + 2):
         if len(mapped) >= _MAX_ROWS:
+            break
+        if mapped and _is_section_title(row):
             break
         values: dict[str, Decimal] = {}
         for field in _FIELDS:
