@@ -9,6 +9,12 @@ from src.modules.analytics import (
 )
 from src.modules.analytics.enums import MARKETPLACE_TITLES
 from src.modules.content import SeoText
+from src.modules.finance.schemas import (
+    FeeKind,
+    ProfitabilityReport,
+    ReportAnalysis,
+    UnitInputs,
+)
 from src.modules.infographics import StyleVariant
 from src.modules.legal import (
     BusinessScanReport,
@@ -518,3 +524,198 @@ def render_legal_business_report(report: BusinessScanReport) -> str:
     if skipped:
         blocks.append(skipped)
     return _clamp("".join(blocks), REPORT_LIMIT)
+
+
+# --- Finance (M5, #48/#52) ---
+
+FIN_CALC_HEADER = "🧮 Юнит-экономика"
+
+FIN_SCENARIO = "\n🧪 Сценарий: {label}"
+
+FIN_INPUTS = (
+    "\n\n💰 Цена: {price}"
+    "\n📦 Себестоимость: {cost}"
+    "\n🧾 Расходы/шт: {expenses}"
+    "\n📊 Количество: {quantity}"
+)
+
+FIN_SEPARATOR = "\n———"
+
+FIN_RESULT = (
+    "\n📈 Выручка: {revenue}"
+    "\n📉 Себестоимость: {cogs}"
+    "\n🧾 Расходы: {expenses_total}"
+    "{commission}"
+    "\n💎 Чистая прибыль: {net}"
+    "\n📊 Маржа: {margin}%"
+    "\n🎯 Цена безубыточности: {break_even}"
+)
+
+FIN_COMMISSION_LINE = "\n🏷 Комиссия: {commission}"
+
+FIN_REPORT_HEADER = "📊 Разбор отчёта: {filename}"
+
+FIN_REPORT_META = "\n{marketplace} · строк: {rows} · тарифы на {as_of}"
+
+FIN_NO_FINDINGS = "\n\n✅ Подозрительных списаний не нашлось."
+
+FIN_FINDINGS = "\n\n⚠️ Найдено списаний: {count}{items}"
+
+FIN_FINDING_ITEM = "\n· {emoji} {amount} — {detail}{row}"
+
+FIN_FINDING_ROW = " [строка {row}]"
+
+FIN_TOTALS = "\n\n💰 Итоги"
+
+FIN_TOTAL_LINE = "\n{label}: {value}"
+
+FIN_EFFECTIVE_COMMISSION = "\n📌 Эффективная комиссия: {value}%"
+
+FIN_FILE_CAPTION = "📊 Разбор отчёта: {filename}"
+
+FINDING_EMOJI: dict[FeeKind, str] = {
+    FeeKind.FINE: "🔴",
+    FeeKind.HIDDEN_FEE: "🟠",
+    FeeKind.COMMISSION_OVER: "🔺",
+    FeeKind.LOGISTICS_HIGH: "🚚",
+    FeeKind.STORAGE_HIGH: "📦",
+}
+
+
+def _money(value: Decimal) -> str:
+    """Render RUB money RU-style: ``1 234,56 ₽``."""
+    text = f"{value:.2f}"
+    negative = text.startswith("-")
+    text = text.lstrip("-")
+    integer, _, frac = text.partition(".")
+    grouped = f"{int(integer):,}".replace(",", " ")
+    rendered = f"{grouped},{frac} ₽"
+    return f"-{rendered}" if negative else rendered
+
+
+def _number(value: Decimal) -> str:
+    """Plain decimal RU-style: ``45,0`` / ``100``."""
+    text = f"{value}"
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text.replace(".", ",")
+
+
+def render_unit_calc_report(
+    inputs: UnitInputs, report: ProfitabilityReport, *, scenario: str = ""
+) -> str:
+    """Manual unit-economics report (scene A, #48).
+
+    ``scenario`` labels a what-if run (#47): the base inputs no longer
+    describe the shown numbers, so the input block is skipped.
+    """
+    header = FIN_CALC_HEADER
+    if scenario:
+        header += FIN_SCENARIO.format(label=scenario)
+    commission = (
+        FIN_COMMISSION_LINE.format(commission=_money(report.commission))
+        if report.commission
+        else ""
+    )
+    break_even = (
+        _money(report.break_even_price) if report.break_even_price is not None else "—"
+    )
+    body = FIN_RESULT.format(
+        revenue=_money(report.revenue),
+        cogs=_money(report.cogs),
+        expenses_total=_money(report.other_expenses),
+        commission=commission,
+        net=_money(report.net_profit),
+        margin=_number(report.margin_pct),
+        break_even=break_even,
+    )
+    if scenario:
+        return _clamp(f"{header}{body}", REPORT_LIMIT)
+    text = (
+        header
+        + FIN_INPUTS.format(
+            price=_money(inputs.price),
+            cost=_money(inputs.unit_cost),
+            expenses=_money(inputs.unit_expenses),
+            quantity=_number(inputs.quantity),
+        )
+        + FIN_SEPARATOR
+        + body
+    )
+    return _clamp(text, REPORT_LIMIT)
+
+
+def finance_calc_copy_text(inputs: UnitInputs, report: ProfitabilityReport) -> str:
+    """Copy-button payload clamped to Telegram's 256-char cap."""
+    text = (
+        f"Юнит-экономика: цена {_money(inputs.price)} x {_number(inputs.quantity)} шт, "
+        f"себест. {_money(inputs.unit_cost)}, расходы {_money(inputs.unit_expenses)}/шт "
+        f"-> выручка {_money(report.revenue)}, прибыль {_money(report.net_profit)}, "
+        f"маржа {_number(report.margin_pct)}%"
+    )
+    return _clamp(text, _COPY_LIMIT)
+
+
+def _finance_findings_block(analysis: ReportAnalysis) -> str:
+    if not analysis.findings:
+        return FIN_NO_FINDINGS
+    items = "".join(
+        FIN_FINDING_ITEM.format(
+            emoji=FINDING_EMOJI[finding.kind],
+            amount=_money(finding.amount),
+            detail=finding.detail,
+            row=(
+                FIN_FINDING_ROW.format(row=finding.source_row)
+                if finding.source_row
+                else ""
+            ),
+        )
+        for finding in analysis.findings
+    )
+    return FIN_FINDINGS.format(count=len(analysis.findings), items=items)
+
+
+def _totals_block(analysis: ReportAnalysis) -> str:
+    totals = analysis.totals
+    lines = [FIN_TOTAL_LINE.format(label="Выручка", value=_money(totals.revenue))]
+    for label, value in (
+        ("Комиссия", totals.commission),
+        ("Логистика", totals.logistics),
+        ("Хранение", totals.storage),
+        ("Штрафы", totals.fines),
+        ("Корректировки", -totals.other_expenses),
+    ):
+        if value:
+            lines.append(FIN_TOTAL_LINE.format(label=label, value=_money(value)))
+    lines.append(
+        FIN_TOTAL_LINE.format(
+            label="💎 Чистая прибыль", value=_money(totals.net_profit)
+        )
+    )
+    lines.append(
+        FIN_TOTAL_LINE.format(label="📊 Маржа", value=f"{_number(totals.margin_pct)}%")
+    )
+    if analysis.effective_commission_pct is not None:
+        lines.append(
+            FIN_EFFECTIVE_COMMISSION.format(
+                value=_number(analysis.effective_commission_pct)
+            )
+        )
+    return FIN_TOTALS + "".join(lines)
+
+
+def render_report_analysis(
+    analysis: ReportAnalysis, limit: int | None = REPORT_LIMIT
+) -> str:
+    """Settlement report analysis: findings + profitability totals (#52)."""
+    marketplace = (
+        MARKETPLACE_TITLES[analysis.marketplace.value]
+        if analysis.marketplace is not None
+        else "Маркетплейс не определён"
+    )
+    header = FIN_REPORT_HEADER.format(filename=analysis.filename)
+    header += FIN_REPORT_META.format(
+        marketplace=marketplace, rows=analysis.row_count, as_of=analysis.tariffs_as_of
+    )
+    text = header + _finance_findings_block(analysis) + _totals_block(analysis)
+    return text if limit is None else _clamp(text, limit)

@@ -14,6 +14,7 @@ from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup
 
 from src.bot.delivery import AiogramResultSink
+from src.bot.finance_delivery import deliver_report_analysis
 from src.bot.keyboards.inline import (
     back_menu,
     infographic_variants,
@@ -33,6 +34,7 @@ from src.bot.renderers import (
 )
 from src.bot.texts import (
     ANALYSIS_LOADING,
+    FIN_REPORT_EMPTY,
     INFO_FAILED,
     JOB_CANCELLED,
     JOB_FAILED,
@@ -49,6 +51,8 @@ from src.modules.analytics.jobs import NICHE_SCAN_JOB_TYPE
 from src.modules.analytics.schemas import AnalysisReport, NicheReport
 from src.modules.content import SeoText
 from src.modules.content.jobs import SEO_JOB_TYPE
+from src.modules.finance import ReportAnalysis
+from src.modules.finance.jobs import FINANCE_JOB_TYPE
 from src.modules.infographics import RenderedArtwork
 from src.modules.infographics.jobs import INFOGRAPHICS_JOB_TYPE
 from src.modules.legal import BusinessScanReport
@@ -122,11 +126,15 @@ class JobPoller:
                 logger.warning(
                     "job %s failed: %s", job_id, info.error or "unknown error"
                 )
-                text = (
-                    INFO_FAILED
-                    if info.job_type == INFOGRAPHICS_JOB_TYPE
-                    else JOB_FAILED
-                )
+                if (
+                    info.job_type == FINANCE_JOB_TYPE
+                    and info.error == "ReportParseError"
+                ):
+                    text = FIN_REPORT_EMPTY
+                elif info.job_type == INFOGRAPHICS_JOB_TYPE:
+                    text = INFO_FAILED
+                else:
+                    text = JOB_FAILED
                 await self._deliver_terminal(info, text)
                 await self._cleanup(job_id)
             elif info.state == JobState.CANCELLED:
@@ -204,6 +212,20 @@ class JobPoller:
                 info,
                 render_legal_business_report(legal_report),
                 reply_markup=legal_result_keyboard(legal_report),
+            )
+            return
+        if info.job_type == FINANCE_JOB_TYPE:
+            finance_analysis = ReportAnalysis.model_validate_json(info.result)
+            chat_id = _chat_id(info)
+            if chat_id is None:
+                logger.warning("job %s has no valid chat_id in payload", info.id)
+                return
+            await deliver_report_analysis(
+                self._sink,
+                chat_id,
+                finance_analysis,
+                status_message_id=_status_message_id(info),
+                reply_markup=back_menu(),
             )
             return
         analysis = AnalysisReport.model_validate_json(info.result)

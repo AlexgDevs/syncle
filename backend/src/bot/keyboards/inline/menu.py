@@ -1,12 +1,13 @@
 from aiogram.types import CopyTextButton, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from src.bot.renderers import legal_finding_copy_text
+from src.bot.renderers import finance_calc_copy_text, legal_finding_copy_text
 from src.bot.texts import (
     BACK_TO_MENU,
     BTN_ANALYZE,
     BTN_COPY_DESCRIPTION,
     BTN_COPY_TITLE,
+    BTN_FIN_COPY,
     BTN_INFOGRAPHICS,
     BTN_LEGAL_DONE,
     BTN_PAGE_NEXT,
@@ -18,11 +19,16 @@ from src.bot.texts import (
     BTN_TONE_HARSH,
     BTN_TONE_NEUTRAL,
     BTN_TONE_SOFT,
+    BTN_WIF_PRICE_DOWN,
+    BTN_WIF_PRICE_UP,
+    BTN_WIF_QTY_DOWN,
+    BTN_WIF_QTY_UP,
     SEO_MENU_LABEL,
 )
 from src.modules.analytics.enums import MARKETPLACE_TITLES
 from src.modules.analytics.schemas import Review
 from src.modules.content import SeoText
+from src.modules.finance.schemas import ProfitabilityReport, UnitInputs
 from src.modules.legal import BusinessScanReport
 from src.modules.reviews import ReviewReport
 
@@ -40,8 +46,8 @@ MENU_ROWS = {
         [(SEO_MENU_LABEL, "scene:seo")],
     ],
     "finance": [
-        [("🧮 Быстрый расчёт", "stub:unit_calc")],
-        [("📁 Отчёт WB/Ozon (Excel/CSV)", "stub:weekly_report")],
+        [("🧮 Быстрый расчёт", "scene:finance:calc")],
+        [("📁 Отчёт WB/Ozon (Excel/CSV)", "scene:finance:report")],
     ],
     "reputation": [
         [("🏷 Аудит и авто-теги отзывов", "scene:reviews")],
@@ -300,5 +306,41 @@ def legal_result_keyboard(report: BusinessScanReport) -> InlineKeyboardMarkup:
                 )
             )
             copied += 1
+    builder.row(InlineKeyboardButton(text=BACK_TO_MENU, callback_data="menu:main"))
+    return builder.as_markup()
+
+
+def finance_calc_result(
+    inputs: UnitInputs, report: ProfitabilityReport
+) -> InlineKeyboardMarkup:
+    """Result keyboard: copy button plus what-if scenario buttons (M5, #47/#48).
+
+    Scenario callbacks are relative to the original inputs kept in the
+    FSM, so pressing one always re-runs ±10% from the base case.
+    """
+    builder = InlineKeyboardBuilder()
+    copy_text = finance_calc_copy_text(inputs, report)
+    if 0 < len(copy_text) <= COPY_TEXT_LIMIT:
+        builder.row(
+            InlineKeyboardButton(
+                text=BTN_FIN_COPY, copy_text=CopyTextButton(text=copy_text)
+            )
+        )
+    builder.row(
+        InlineKeyboardButton(
+            text=BTN_WIF_PRICE_UP, callback_data="scene:finance:calc:price_up"
+        ),
+        InlineKeyboardButton(
+            text=BTN_WIF_PRICE_DOWN, callback_data="scene:finance:calc:price_down"
+        ),
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text=BTN_WIF_QTY_UP, callback_data="scene:finance:calc:qty_up"
+        ),
+        InlineKeyboardButton(
+            text=BTN_WIF_QTY_DOWN, callback_data="scene:finance:calc:qty_down"
+        ),
+    )
     builder.row(InlineKeyboardButton(text=BACK_TO_MENU, callback_data="menu:main"))
     return builder.as_markup()

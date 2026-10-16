@@ -15,6 +15,7 @@ from aiogram.types import CallbackQuery, ErrorEvent, Message, Update
 
 from src.bot.texts import (
     CARD_NOT_FOUND,
+    FIN_REPORT_EMPTY,
     GENERIC_ERROR,
     INFO_FAILED,
     LEGAL_DOC_UNSUPPORTED,
@@ -41,6 +42,7 @@ from src.modules.analytics.errors import (
     UnsupportedMarketplaceError,
 )
 from src.modules.content.errors import SeoGenerationError
+from src.modules.finance import FinanceError, ReportParseError
 from src.modules.infographics import InfographicsError
 from src.modules.legal import LegalDocumentError, LegalScanError
 from src.modules.legal.schemas import SkipErrorCode
@@ -72,6 +74,10 @@ def describe_error(exc: Exception) -> str:
         return LEGAL_DOCUMENT_FAILED
     if isinstance(exc, LegalScanError):
         return LEGAL_SCAN_FAILED
+    if isinstance(exc, ReportParseError):
+        return FIN_REPORT_EMPTY
+    if isinstance(exc, FinanceError):
+        return GENERIC_ERROR
     if isinstance(exc, LLMTimeoutError):
         return LLM_TIMEOUT_TEXT
     if isinstance(exc, LLMRateLimitError):
