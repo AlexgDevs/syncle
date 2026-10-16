@@ -166,6 +166,9 @@ class TaskiqJobRunner:
         )
         await self._redis.expire(job_key(job_id), JOB_TTL_SECONDS)
         await self._redis.sadd(active_jobs_key(), job_id)
+        # TTL keeps the set from outliving its jobs when the poller dies
+        # (refreshed on every submit; the poller also self-heals orphans)
+        await self._redis.expire(active_jobs_key(), JOB_TTL_SECONDS)
         task = get_broker().find_task(ANALYSIS_TASK_NAME)
         if task is None:
             raise RuntimeError(f"task {ANALYSIS_TASK_NAME!r} is not registered")
