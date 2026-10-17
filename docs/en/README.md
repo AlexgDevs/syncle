@@ -27,10 +27,12 @@ docs/
 4. [development/lessons.md](en/development/lessons.md) — short practical
    lessons; read before non-trivial edits.
 5. [configuration.md](en/configuration.md) — all `.env` parameters.
-6. Modules (`en/modules/`) — growing:
-   [core.md](en/modules/core.md) ✚, [analytics.md](en/modules/analytics.md) ✚,
-   [seo.md](en/modules/seo.md) ✚, [reviews.md](en/modules/reviews.md) ✚;
-   legal, finance, infographics, bot, user — in progress.
+6. Modules (`en/modules/`) — all done (RU + EN):
+   [core](en/modules/core.md), [analytics](en/modules/analytics.md),
+   [seo](en/modules/seo.md), [reviews](en/modules/reviews.md),
+   [legal](en/modules/legal.md), [finance](en/modules/finance.md),
+   [infographics](en/modules/infographics.md), [bot](en/modules/bot.md),
+   [user](en/modules/user.md).
 
 ## Conventions
 

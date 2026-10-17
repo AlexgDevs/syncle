@@ -27,10 +27,12 @@ docs/
 4. [development/lessons.md](ru/development/lessons.md) — краткие
    практические выводы; читать перед нетривиальными правками.
 5. [configuration.md](ru/configuration.md) — все параметры `.env`.
-6. Модули (`ru/modules/`) — по мере наполнения:
-   [core.md](ru/modules/core.md) ✚, [analytics.md](ru/modules/analytics.md) ✚,
-   [seo.md](ru/modules/seo.md) ✚, [reviews.md](ru/modules/reviews.md) ✚;
-   legal, finance, infographics, bot, user — в работе.
+6. Модули (`ru/modules/`) — все готовы (RU + EN):
+   [core](ru/modules/core.md), [analytics](ru/modules/analytics.md),
+   [seo](ru/modules/seo.md), [reviews](ru/modules/reviews.md),
+   [legal](ru/modules/legal.md), [finance](ru/modules/finance.md),
+   [infographics](ru/modules/infographics.md), [bot](ru/modules/bot.md),
+   [user](ru/modules/user.md).
 
 ## Договорённости
 
